@@ -11,11 +11,13 @@ const CAR_X_UNITS = 3.2;
 // so it can't drift out of sync with what's on screen the way this flat constant did before.
 const HITBOX_HALF_WIDTH = 0.5;
 
-const START_SPEED = 4.5;
-const MAX_SPEED = 12;
-const SPEED_RAMP_PER_SECOND = 0.3;
-const MIN_SPAWN_INTERVAL = 0.55;
-const MAX_SPAWN_INTERVAL = 1.35;
+// Difficulty bumped up again ahead of a content update — higher top speed, faster ramp to
+// it, and denser spawns throughout (both at the min and max end). Mirrors GameEngine.kt.
+const START_SPEED = 5.5;
+const MAX_SPEED = 16;
+const SPEED_RAMP_PER_SECOND = 0.5;
+const MIN_SPAWN_INTERVAL = 0.4;
+const MAX_SPAWN_INTERVAL = 1.1;
 const ITEM_SPAWN_CHANCE = 0.15;
 const ITEM_SCORE_BONUS = 50;
 const MAX_FUEL = 100;

@@ -194,11 +194,13 @@ class GameEngine(private val onSfx: (SfxEvent) -> Unit = {}) {
     }
 
     companion object {
-        private const val START_SPEED = 4.5f
-        private const val MAX_SPEED = 12f
-        private const val SPEED_RAMP_PER_SECOND = 0.3f
-        private const val MIN_SPAWN_INTERVAL = 0.55f
-        private const val MAX_SPAWN_INTERVAL = 1.35f
+        // Difficulty bumped up again ahead of a content update — higher top speed, faster
+        // ramp to it, and denser spawns throughout (both at the min and max end).
+        private const val START_SPEED = 5.5f
+        private const val MAX_SPEED = 16f
+        private const val SPEED_RAMP_PER_SECOND = 0.5f
+        private const val MIN_SPAWN_INTERVAL = 0.4f
+        private const val MAX_SPAWN_INTERVAL = 1.1f
         private const val ITEM_SPAWN_CHANCE = 0.15f
         private const val ITEM_SCORE_BONUS = 50
         private const val MAX_FUEL = 100f
