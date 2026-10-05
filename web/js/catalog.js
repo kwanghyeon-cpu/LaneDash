@@ -50,11 +50,11 @@ const CARS = [
 const OBSTACLE_VARIANTS = {
   CONE: { kind: 'CONE', hitWidthScale: 0.3, heightScale: 0.45, sprite: 'assets/obstacles/obstacle_cone.png', hitHalfWidthUnits: 0.46 },
   BARRIER: { kind: 'BARRIER', hitWidthScale: 1.0, heightScale: 0.55, sprite: 'assets/obstacles/obstacle_barrier.png', hitHalfWidthUnits: 0.70 },
-  // Vehicle obstacles (sedan/suv/bus/truck) scaled another 0.7x ahead of release.
-  SEDAN: { kind: 'SEDAN', hitWidthScale: 0.63, heightScale: 0.595, sprite: 'assets/obstacles/obstacle_sedan.png', hitHalfWidthUnits: 1.253 },
-  SUV: { kind: 'SUV', hitWidthScale: 0.735, heightScale: 0.7, sprite: 'assets/obstacles/obstacle_suv.png', hitHalfWidthUnits: 1.456 },
-  BUS: { kind: 'BUS', hitWidthScale: 0.958, heightScale: 0.655, sprite: 'assets/obstacles/obstacle_bus.png', hitHalfWidthUnits: 1.897 },
-  TRUCK: { kind: 'TRUCK', hitWidthScale: 0.833, heightScale: 0.539, sprite: 'assets/obstacles/obstacle_truck.png', hitHalfWidthUnits: 1.652 },
+  // Vehicle obstacles (sedan/suv/bus/truck) scaled 0.7x twice (0.49x of the original) ahead of release.
+  SEDAN: { kind: 'SEDAN', hitWidthScale: 0.441, heightScale: 0.417, sprite: 'assets/obstacles/obstacle_sedan.png', hitHalfWidthUnits: 0.877 },
+  SUV: { kind: 'SUV', hitWidthScale: 0.515, heightScale: 0.49, sprite: 'assets/obstacles/obstacle_suv.png', hitHalfWidthUnits: 1.019 },
+  BUS: { kind: 'BUS', hitWidthScale: 0.671, heightScale: 0.459, sprite: 'assets/obstacles/obstacle_bus.png', hitHalfWidthUnits: 1.328 },
+  TRUCK: { kind: 'TRUCK', hitWidthScale: 0.583, heightScale: 0.377, sprite: 'assets/obstacles/obstacle_truck.png', hitHalfWidthUnits: 1.156 },
 };
 
 // Small/common obstacles spawn more often than big rare ones like buses.

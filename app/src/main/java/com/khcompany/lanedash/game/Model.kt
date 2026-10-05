@@ -71,13 +71,13 @@ enum class ObstacleVariant(
 ) {
     // Bus bumped another 1.2x and truck (cement mixer) 2x from their prior scale, then
     // truck brought back down to 0.7x of that; barrier and sedan left as-is. Vehicle
-    // obstacles (sedan/suv/bus/truck) later scaled another 0.7x ahead of release.
+    // obstacles (sedan/suv/bus/truck) later scaled 0.7x twice (0.49x of the original) ahead of release.
     CONE(0.3f, 0.45f, "obstacle_cone", 0.46f),
     BARRIER(1.0f, 0.55f, "obstacle_barrier", 0.70f),
-    SEDAN(0.63f, 0.595f, "obstacle_sedan", 1.253f),
-    SUV(0.735f, 0.7f, "obstacle_suv", 1.456f),
-    BUS(0.958f, 0.655f, "obstacle_bus", 1.897f),
-    TRUCK(0.833f, 0.539f, "obstacle_truck", 1.652f),
+    SEDAN(0.441f, 0.417f, "obstacle_sedan", 0.877f),
+    SUV(0.515f, 0.49f, "obstacle_suv", 1.019f),
+    BUS(0.671f, 0.459f, "obstacle_bus", 1.328f),
+    TRUCK(0.583f, 0.377f, "obstacle_truck", 1.156f),
 }
 
 data class RoadEntity(

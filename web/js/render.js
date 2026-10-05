@@ -206,9 +206,9 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
     return bottom - (bottom - top) * 0.06;
   };
 
-  // Scaled 0.7x ahead of release — mirrors GameScreen.kt.
-  const playerCarHeight = laneCarHeight(animatedLane) * 3 * 0.7;
-  const playerCarWidth = laneCarWidth(animatedLane) * 3 * 0.7;
+  // Scaled 0.7x twice (0.49x) ahead of release — mirrors GameScreen.kt.
+  const playerCarHeight = laneCarHeight(animatedLane) * 3 * 0.49;
+  const playerCarWidth = laneCarWidth(animatedLane) * 3 * 0.49;
   const playerCarY = laneBottomY(animatedLane) - playerCarHeight / 2;
 
   // Oversized sprites (OBSTACLE_SCALE) spill into neighboring lanes, so draw order has to

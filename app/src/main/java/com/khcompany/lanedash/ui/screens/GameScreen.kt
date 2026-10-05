@@ -217,8 +217,8 @@ fun GameScreen(
             // 1.5x, then scaled 0.7x ahead of release) but bottom-anchored, so only its
             // base/wheels need to sit inside the current lane — the rest is free to overlap the
             // lane above.
-            val playerCarHeight = laneCarHeight(animatedLane) * 3f * 0.7f
-            val playerCarWidth = laneCarWidth(animatedLane) * 3f * 0.7f
+            val playerCarHeight = laneCarHeight(animatedLane) * 3f * 0.49f
+            val playerCarWidth = laneCarWidth(animatedLane) * 3f * 0.49f
             val playerCarY = laneBottomY(animatedLane) - playerCarHeight / 2f
 
             // Oversized sprites (OBSTACLE_SCALE) spill into neighboring lanes, so draw order
