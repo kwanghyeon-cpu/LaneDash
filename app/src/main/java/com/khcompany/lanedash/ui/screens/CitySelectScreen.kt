@@ -130,5 +130,11 @@ private fun CityCard(city: CityTheme, selected: Boolean, onClick: () -> Unit) {
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 11.sp),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )
+        Text(
+            text = city.traitText,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }

@@ -9,6 +9,14 @@ const SFX_PATHS = {
   NEW_BEST: 'assets/sfx/sfx_newbest.wav',
 };
 
+// Newer events reuse existing clips at a different pitch instead of shipping new audio
+// files; mirrors the Cue table in SoundManager.kt.
+const SFX_CUES = {
+  NEAR_MISS: { base: 'LANE_CHANGE', rate: 1.7, volume: 1 },
+  POWERUP: { base: 'COIN', rate: 0.7, volume: 1 },
+  SHIELD_HIT: { base: 'CRASH', rate: 1.5, volume: 0.6 },
+};
+
 const BGM_VOLUME_KEY = 'lane_dash_bgm_volume';
 const SFX_VOLUME_KEY = 'lane_dash_sfx_volume';
 
@@ -55,12 +63,22 @@ class AudioManager {
 
   play(event) {
     if (this.sfxVolume <= 0) return;
-    const src = this.buffers[event];
+    const cue = SFX_CUES[event] || { base: event, rate: 1, volume: 1 };
+    const src = this.buffers[cue.base];
     if (!src) return;
     // Clone so overlapping triggers (e.g. rapid coin pickups) don't cut each other off.
     const node = src.cloneNode();
-    node.volume = this.sfxVolume;
+    node.volume = Math.min(1, this.sfxVolume * cue.volume);
+    node.playbackRate = cue.rate;
     node.play().catch(() => {});
+  }
+
+  pauseBgm() {
+    this.bgm.pause();
+  }
+
+  resumeBgm() {
+    if (this.bgm.paused) this.bgm.play().catch(() => {});
   }
 
   startBgm() {

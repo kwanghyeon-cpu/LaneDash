@@ -11,24 +11,33 @@ const CITIES = [
     skyTop: '#2E1A47', skyBottom: '#FF8C69',
     roadColor: '#241830', roadLineColor: '#FFD166',
     sprite: 'assets/cities/city_seoul.png',
+    // Per-city tuning, mirrors RunTraits / traitText in Model.kt.
+    traits: { speed: 1, fuelDrain: 1, spawnDensity: 1, score: 1 },
+    traitText: '균형 잡힌 기본 코스',
   },
   {
     id: 'tokyo', name: '도쿄', nameEn: 'TOKYO',
     skyTop: '#05021A', skyBottom: '#1B0F3D',
     roadColor: '#0D0620', roadLineColor: '#FF2E92',
     sprite: 'assets/cities/city_tokyo.png',
+    traits: { speed: 1.15, fuelDrain: 1, spawnDensity: 1, score: 1 },
+    traitText: '속도 +15%',
   },
   {
     id: 'newyork', name: '뉴욕', nameEn: 'NEW YORK',
     skyTop: '#FF9A56', skyBottom: '#FFD56B',
     roadColor: '#3A2E28', roadLineColor: '#FFF3B0',
     sprite: 'assets/cities/city_newyork.png',
+    traits: { speed: 1, fuelDrain: 1, spawnDensity: 1.25, score: 1.1 },
+    traitText: '교통량 +25% · 점수 +10%',
   },
   {
     id: 'paris', name: '파리', nameEn: 'PARIS',
     skyTop: '#BFE3FF', skyBottom: '#F6E7D8',
     roadColor: '#4A4038', roadLineColor: '#FFFFFF',
     sprite: 'assets/cities/city_paris.png',
+    traits: { speed: 1, fuelDrain: 1.3, spawnDensity: 1, score: 1.1 },
+    traitText: '연료 소모 +30% · 점수 +10%',
   },
 ];
 

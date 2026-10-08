@@ -19,10 +19,22 @@ const SPEED_RAMP_PER_SECOND = 0.5;
 const MIN_SPAWN_INTERVAL = 0.4;
 const MAX_SPAWN_INTERVAL = 1.1;
 const ITEM_SPAWN_CHANCE = 0.15;
+const POWERUP_SPAWN_CHANCE = 0.05;
 const ITEM_SCORE_BONUS = 50;
+const POWERUP_SCORE_BONUS = 25;
 const MAX_FUEL = 100;
 const FUEL_DRAIN_PER_SECOND = 4.5;
 const FUEL_REFILL_AMOUNT = 26;
+
+const NEAR_MISS_WINDOW_SECONDS = 0.3;
+const NEAR_MISS_SCORE = 30;
+const NEAR_MISS_FUEL = 3;
+
+const SHIELD_DURATION_SECONDS = 6;
+const MAGNET_DURATION_SECONDS = 8;
+const MAGNET_RANGE_UNITS = 9;
+
+const DEFAULT_TRAITS = { speed: 1, fuelDrain: 1, spawnDensity: 1, score: 1 };
 
 // --- Pseudo-3D perspective ---
 // Farther (lower-index, drawn toward the top of the road) lanes read smaller/narrower
@@ -49,9 +61,11 @@ function laneSizeScale(lane) {
 }
 
 class GameEngine {
-  constructor(onSfx) {
+  constructor(onSfx, random) {
     this.onSfx = onSfx || (() => {});
+    this.random = random || Math.random;
     this.status = 'READY';
+    this.paused = false;
     this.laneIndex = Math.floor(LANE_COUNT / 2);
     this.distance = 0;
     this.speed = START_SPEED;
@@ -59,49 +73,108 @@ class GameEngine {
     this.fuel = MAX_FUEL;
     this.gameOverReason = null;
     this.entities = [];
+    this.traits = DEFAULT_TRAITS;
+    this.shieldTimeLeft = 0;
+    this.magnetTimeLeft = 0;
+    this.nearMissCount = 0;
+    this.fuelCollected = 0;
+    this.elapsedSeconds = 0;
+    this._bonusScore = 0;
     this._spawnCooldown = 1.2;
     this._nextEntityId = 0;
     this._fuelWarningPlayed = false;
     this._lastSpawnLane = -1;
   }
 
-  start() {
+  /** Ground speed after the city's speed multiplier — what actually moves the world. */
+  get effectiveSpeed() {
+    return this.speed * this.traits.speed;
+  }
+
+  start(traits) {
+    this.traits = traits || DEFAULT_TRAITS;
     this.entities = [];
     this.laneIndex = Math.floor(LANE_COUNT / 2);
     this.distance = 0;
     this.speed = START_SPEED;
     this.score = 0;
+    this._bonusScore = 0;
     this.fuel = MAX_FUEL;
     this._spawnCooldown = 1.0;
     this.gameOverReason = null;
     this._fuelWarningPlayed = false;
     this._lastSpawnLane = -1;
+    this.paused = false;
+    this.shieldTimeLeft = 0;
+    this.magnetTimeLeft = 0;
+    this.nearMissCount = 0;
+    this.fuelCollected = 0;
+    this.elapsedSeconds = 0;
     this.status = 'RUNNING';
   }
 
+  pause() {
+    if (this.status === 'RUNNING') this.paused = true;
+  }
+
+  resume() {
+    this.paused = false;
+  }
+
   moveLaneUp() {
-    if (this.status !== 'RUNNING') return;
-    const next = Math.max(0, this.laneIndex - 1);
-    if (next !== this.laneIndex) this.onSfx('LANE_CHANGE');
-    this.laneIndex = next;
+    this._changeLane(Math.max(0, this.laneIndex - 1));
   }
 
   moveLaneDown() {
-    if (this.status !== 'RUNNING') return;
-    const next = Math.min(LANE_COUNT - 1, this.laneIndex + 1);
-    if (next !== this.laneIndex) this.onSfx('LANE_CHANGE');
+    this._changeLane(Math.min(LANE_COUNT - 1, this.laneIndex + 1));
+  }
+
+  _changeLane(next) {
+    if (this.status !== 'RUNNING' || this.paused || next === this.laneIndex) return;
+    this._awardNearMisses(this.laneIndex);
+    this.onSfx('LANE_CHANGE');
     this.laneIndex = next;
   }
 
+  // Swerving out of a lane just before an obstacle in it arrives is a "near miss" — a
+  // reward for risky dodging, which matters now that traffic is dense. Each obstacle pays
+  // out at most once, and only if it was within a short, speed-scaled reach of the car.
+  _awardNearMisses(fromLane) {
+    const reach = this.effectiveSpeed * NEAR_MISS_WINDOW_SECONDS;
+    let awarded = 0;
+    for (const entity of this.entities) {
+      if (entity.kind !== 'OBSTACLE' || entity.lane !== fromLane || entity.nearMissAwarded) continue;
+      const halfWidth = entity.variant.hitHalfWidthUnits * laneSizeScale(entity.lane);
+      const dx = entity.x - CAR_X_UNITS;
+      if (dx > -halfWidth && dx < halfWidth + reach) {
+        entity.nearMissAwarded = true;
+        awarded++;
+      }
+    }
+    if (awarded > 0) {
+      this.nearMissCount += awarded;
+      this._bonusScore += NEAR_MISS_SCORE * awarded;
+      this.fuel = Math.min(MAX_FUEL, this.fuel + NEAR_MISS_FUEL * awarded);
+      this.onSfx('NEAR_MISS');
+    }
+  }
+
   tick(dtSeconds) {
-    if (this.status !== 'RUNNING') return;
+    if (this.status !== 'RUNNING' || this.paused) return;
     const dt = Math.min(dtSeconds, 0.05);
 
+    this.elapsedSeconds += dt;
     this.speed = Math.min(MAX_SPEED, this.speed + SPEED_RAMP_PER_SECOND * dt);
-    this.distance += this.speed * dt;
-    this.score = Math.floor(this.distance * 10);
+    const groundSpeed = this.effectiveSpeed;
+    this.distance += groundSpeed * dt;
+    // The bonus is tracked separately because the distance part is recomputed every tick
+    // and would otherwise wipe pickup/near-miss points one frame later.
+    this.score = Math.floor(this.distance * 10 * this.traits.score) + this._bonusScore;
 
-    this.fuel = Math.max(0, this.fuel - FUEL_DRAIN_PER_SECOND * dt);
+    this.shieldTimeLeft = Math.max(0, this.shieldTimeLeft - dt);
+    this.magnetTimeLeft = Math.max(0, this.magnetTimeLeft - dt);
+
+    this.fuel = Math.max(0, this.fuel - FUEL_DRAIN_PER_SECOND * this.traits.fuelDrain * dt);
     if (!this._fuelWarningPlayed && this.fuel <= MAX_FUEL * 0.2) {
       this._fuelWarningPlayed = true;
       this.onSfx('FUEL_LOW_WARNING');
@@ -116,12 +189,13 @@ class GameEngine {
     if (this._spawnCooldown <= 0) {
       this._spawnEntity();
       const speedFactor = Math.min(1, Math.max(0, this.speed / MAX_SPEED));
-      this._spawnCooldown = MAX_SPAWN_INTERVAL - (MAX_SPAWN_INTERVAL - MIN_SPAWN_INTERVAL) * speedFactor;
+      this._spawnCooldown =
+        (MAX_SPAWN_INTERVAL - (MAX_SPAWN_INTERVAL - MIN_SPAWN_INTERVAL) * speedFactor) / this.traits.spawnDensity;
     }
 
     for (let i = this.entities.length - 1; i >= 0; i--) {
       const entity = this.entities[i];
-      entity.x -= this.speed * dt;
+      entity.x -= groundSpeed * dt;
 
       // Scaled by the entity's own lane depth (see laneSizeScale) — the player sits in
       // that same lane when this fires, so both shrink together and the "touch" point
@@ -129,16 +203,26 @@ class GameEngine {
       const halfWidth = (entity.kind === 'OBSTACLE'
         ? entity.variant.hitHalfWidthUnits
         : HITBOX_HALF_WIDTH) * laneSizeScale(entity.lane);
+      const touching = entity.lane === this.laneIndex && this._isOverlappingCar(entity.x, halfWidth);
 
-      if (entity.lane === this.laneIndex && this._isOverlappingCar(entity.x, halfWidth)) {
-        if (entity.kind === 'OBSTACLE') {
+      if (entity.kind === 'OBSTACLE') {
+        if (touching) {
+          if (this.shieldTimeLeft > 0) {
+            this.onSfx('SHIELD_HIT');
+            this.entities.splice(i, 1);
+            continue;
+          }
           this.onSfx('CRASH');
           this._endGame('COLLISION');
           return;
-        } else {
-          this.score += ITEM_SCORE_BONUS;
-          this.fuel = Math.min(MAX_FUEL, this.fuel + FUEL_REFILL_AMOUNT);
-          this.onSfx('COIN');
+        }
+      } else {
+        const magnetPull = this.magnetTimeLeft > 0
+          && entity.itemType === 'FUEL'
+          && entity.x < CAR_X_UNITS + MAGNET_RANGE_UNITS
+          && entity.x > CAR_X_UNITS - halfWidth;
+        if (touching || magnetPull) {
+          this._collect(entity);
           this.entities.splice(i, 1);
           continue;
         }
@@ -147,6 +231,23 @@ class GameEngine {
       if (entity.x < -1.5) {
         this.entities.splice(i, 1);
       }
+    }
+  }
+
+  _collect(entity) {
+    if (entity.itemType === 'SHIELD') {
+      this._bonusScore += POWERUP_SCORE_BONUS;
+      this.shieldTimeLeft = SHIELD_DURATION_SECONDS;
+      this.onSfx('POWERUP');
+    } else if (entity.itemType === 'MAGNET') {
+      this._bonusScore += POWERUP_SCORE_BONUS;
+      this.magnetTimeLeft = MAGNET_DURATION_SECONDS;
+      this.onSfx('POWERUP');
+    } else {
+      this._bonusScore += ITEM_SCORE_BONUS;
+      this.fuel = Math.min(MAX_FUEL, this.fuel + FUEL_REFILL_AMOUNT);
+      this.fuelCollected++;
+      this.onSfx('COIN');
     }
   }
 
@@ -161,18 +262,23 @@ class GameEngine {
     // getting stuff" far more often than it should over a run.
     let lane;
     if (this._lastSpawnLane >= 0 && this._lastSpawnLane < LANE_COUNT) {
-      const choice = Math.floor(Math.random() * (LANE_COUNT - 1));
+      const choice = Math.floor(this.random() * (LANE_COUNT - 1));
       lane = choice < this._lastSpawnLane ? choice : choice + 1;
     } else {
-      lane = Math.floor(Math.random() * LANE_COUNT);
+      lane = Math.floor(this.random() * LANE_COUNT);
     }
     this._lastSpawnLane = lane;
-    const spawnItem = Math.random() < ITEM_SPAWN_CHANCE;
-    if (spawnItem) {
-      this.entities.push({ id: this._nextEntityId++, lane, x: WORLD_WIDTH_UNITS * 1.05, kind: 'ITEM' });
+    const x = WORLD_WIDTH_UNITS * 1.05;
+    const id = this._nextEntityId++;
+    const roll = this.random();
+    if (roll < POWERUP_SPAWN_CHANCE) {
+      const itemType = this.random() < 0.5 ? 'SHIELD' : 'MAGNET';
+      this.entities.push({ id, lane, x, kind: 'ITEM', itemType });
+    } else if (roll < POWERUP_SPAWN_CHANCE + ITEM_SPAWN_CHANCE) {
+      this.entities.push({ id, lane, x, kind: 'ITEM', itemType: 'FUEL' });
     } else {
-      const variant = WEIGHTED_OBSTACLE_VARIANTS[Math.floor(Math.random() * WEIGHTED_OBSTACLE_VARIANTS.length)];
-      this.entities.push({ id: this._nextEntityId++, lane, x: WORLD_WIDTH_UNITS * 1.05, kind: 'OBSTACLE', variant });
+      const variant = WEIGHTED_OBSTACLE_VARIANTS[Math.floor(this.random() * WEIGHTED_OBSTACLE_VARIANTS.length)];
+      this.entities.push({ id, lane, x, kind: 'OBSTACLE', variant, nearMissAwarded: false });
     }
   }
 

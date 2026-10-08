@@ -55,6 +55,7 @@ fun LaneDashApp(adManager: AdManager, modifier: Modifier = Modifier) {
                 city = GameCatalog.cityById(session.selectedCityId),
                 car = GameCatalog.carById(session.selectedCarId),
                 highScore = session.highScore,
+                playsToday = session.playsToday,
                 leaderboardRepository = session.leaderboardRepository,
                 adManager = adManager,
                 onScoreFinal = { session.reportScore(it) },

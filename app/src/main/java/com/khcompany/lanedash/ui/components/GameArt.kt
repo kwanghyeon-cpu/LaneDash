@@ -835,6 +835,100 @@ fun DrawScope.drawFuelCanItem(center: Offset, radius: Float) {
     }
 }
 
+/** Timed-invincibility pickup, drawn as a blue shield. Mirrors drawShieldItem in render.js. */
+fun DrawScope.drawShieldItem(center: Offset, radius: Float) {
+    val w = radius * 1.7f
+    val h = radius * 2.0f
+    val left = center.x - w / 2f
+    val right = center.x + w / 2f
+    val top = center.y - h / 2f
+    val shield = Path().apply {
+        moveTo(left, top + h * 0.1f)
+        lineTo(right, top + h * 0.1f)
+        lineTo(right, top + h * 0.55f)
+        quadraticTo(right, top + h * 0.88f, center.x, top + h)
+        quadraticTo(left, top + h * 0.88f, left, top + h * 0.55f)
+        close()
+    }
+    drawPath(shield, color = Color(0xFF3D8BFF))
+    clipPath(shield) {
+        drawRect(
+            color = Color.White.copy(alpha = 0.28f),
+            topLeft = Offset(left, top),
+            size = Size(w * 0.5f, h),
+        )
+        drawRect(
+            color = Color.Black.copy(alpha = 0.18f),
+            topLeft = Offset(center.x, top),
+            size = Size(w * 0.5f, h),
+        )
+    }
+    drawPath(shield, color = Color(0xFF1A2340), style = Stroke(width = (radius * 0.14f).coerceAtLeast(1.5f)))
+    val star = Path().apply {
+        moveTo(center.x, center.y - radius * 0.45f)
+        lineTo(center.x + radius * 0.14f, center.y - radius * 0.1f)
+        lineTo(center.x + radius * 0.5f, center.y - radius * 0.1f)
+        lineTo(center.x + radius * 0.2f, center.y + radius * 0.12f)
+        lineTo(center.x + radius * 0.32f, center.y + radius * 0.5f)
+        lineTo(center.x, center.y + radius * 0.27f)
+        lineTo(center.x - radius * 0.32f, center.y + radius * 0.5f)
+        lineTo(center.x - radius * 0.2f, center.y + radius * 0.12f)
+        lineTo(center.x - radius * 0.5f, center.y - radius * 0.1f)
+        lineTo(center.x - radius * 0.14f, center.y - radius * 0.1f)
+        close()
+    }
+    drawPath(star, color = Color.White.copy(alpha = 0.92f))
+}
+
+/** Timed fuel-magnet pickup, drawn as a red horseshoe magnet. Mirrors drawMagnetItem in render.js. */
+fun DrawScope.drawMagnetItem(center: Offset, radius: Float) {
+    val arcR = radius * 0.62f
+    val stroke = (radius * 0.5f).coerceAtLeast(3f)
+    val shift = radius * 0.2f
+    val legTop = center.y - arcR * 0.95f + shift
+    val legBottom = center.y + shift
+    val red = Color(0xFFE63946)
+    drawArc(
+        color = red,
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(center.x - arcR, center.y - arcR + shift),
+        size = Size(arcR * 2f, arcR * 2f),
+        style = Stroke(width = stroke),
+    )
+    for (sign in listOf(-1f, 1f)) {
+        val x = center.x + sign * arcR
+        drawLine(red, Offset(x, legTop), Offset(x, legBottom), strokeWidth = stroke)
+        drawLine(Color(0xFFE8ECF4), Offset(x, legTop), Offset(x, legTop + stroke * 0.95f), strokeWidth = stroke)
+    }
+}
+
+/** Translucent bubble drawn around the player while the shield is active. */
+fun DrawScope.drawShieldBubble(center: Offset, radiusX: Float, radiusY: Float, alpha: Float) {
+    val topLeft = Offset(center.x - radiusX, center.y - radiusY)
+    val size = Size(radiusX * 2f, radiusY * 2f)
+    drawOval(color = Color(0xFF6FD6FF).copy(alpha = 0.2f * alpha), topLeft = topLeft, size = size)
+    drawOval(
+        color = Color(0xFFBDEBFF).copy(alpha = 0.9f * alpha),
+        topLeft = topLeft,
+        size = size,
+        style = Stroke(width = 3f),
+    )
+}
+
+/** Dashed ring around the player while the fuel magnet is active; [phase] animates it. */
+fun DrawScope.drawMagnetAura(center: Offset, radiusX: Float, radiusY: Float, phase: Float) {
+    val topLeft = Offset(center.x - radiusX, center.y - radiusY)
+    val size = Size(radiusX * 2f, radiusY * 2f)
+    drawOval(
+        color = Color(0xFFFF5A6E).copy(alpha = 0.85f),
+        topLeft = topLeft,
+        size = size,
+        style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f), phase)),
+    )
+}
+
 private val SEDAN_PALETTE = CarOption(
     id = "traffic_sedan",
     displayName = "",

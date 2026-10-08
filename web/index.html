@@ -6,7 +6,7 @@
 <title>Lane Dash</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css" />
-<link rel="stylesheet" href="style.css?v=6" />
+<link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
 
@@ -47,7 +47,11 @@
       <canvas id="game-canvas"></canvas>
 
       <div class="hud">
-        <div id="hud-speed" class="hud-speed">0 KM/H</div>
+        <div class="hud-left">
+          <div id="hud-speed" class="hud-speed">0 KM/H</div>
+          <div id="hud-shield" class="hud-powerup hud-shield hidden"></div>
+          <div id="hud-magnet" class="hud-powerup hud-magnet hidden"></div>
+        </div>
         <div class="hud-fuel">
           <div class="hud-fuel-label">FUEL</div>
           <div class="fuel-track"><div id="fuel-bar" class="fuel-bar"></div></div>
@@ -58,11 +62,25 @@
         </div>
       </div>
 
+      <div id="hud-toast" class="hud-toast"></div>
+
       <div class="lane-controls">
         <button id="btn-lane-up" class="lane-btn" aria-label="위 차선">▲</button>
         <button id="btn-lane-down" class="lane-btn" aria-label="아래 차선">▼</button>
       </div>
-      <p class="controls-hint">↑ / ↓ 키로도 조작할 수 있어요</p>
+      <button id="btn-pause" class="lane-btn pause-btn" aria-label="일시정지">⏸</button>
+      <p class="controls-hint">↑ / ↓ 키로 이동, P 키로 일시정지</p>
+
+      <div id="pause-overlay" class="overlay hidden">
+        <div class="pause-card">
+          <h2 class="pause-title">일시정지</h2>
+          <button id="btn-resume" class="btn btn-primary overlay-btn">계속하기</button>
+          <div class="overlay-btn-row">
+            <button id="btn-pause-restart" class="btn btn-secondary">다시 시작</button>
+            <button id="btn-pause-home" class="btn btn-secondary">HOME</button>
+          </div>
+        </div>
+      </div>
 
       <div id="gameover-overlay" class="overlay hidden">
         <div class="overlay-card">
@@ -71,6 +89,9 @@
             <p id="gameover-reason" class="gameover-reason"></p>
             <p id="gameover-score" class="gameover-score"></p>
             <p id="gameover-best" class="gameover-best"></p>
+            <p id="gameover-stats" class="gameover-stat"></p>
+            <p id="gameover-plays" class="gameover-stat"></p>
+            <p id="gameover-top" class="gameover-stat gameover-top"></p>
           </div>
           <div class="overlay-col overlay-col-actions">
             <div id="gameover-qualify" class="qualify-block hidden">
@@ -78,7 +99,10 @@
               <input id="score-name-input" class="name-input" type="text" maxlength="12" placeholder="이름 입력" />
               <button id="btn-submit-score" class="btn btn-primary overlay-btn">등록하기</button>
             </div>
-            <button id="btn-view-leaderboard" class="btn btn-secondary overlay-btn">순위표 보기</button>
+            <div class="overlay-btn-row">
+              <button id="btn-view-leaderboard" class="btn btn-secondary">순위표</button>
+              <button id="btn-share" class="btn btn-secondary">공유하기</button>
+            </div>
             <div class="overlay-btn-row">
               <button id="btn-retry" class="btn btn-primary">RETRY</button>
               <button id="btn-gameover-home" class="btn btn-secondary">HOME</button>
@@ -113,21 +137,26 @@
           <input id="sfx-volume" type="range" min="0" max="100" step="1" />
           <span id="sfx-volume-value" class="settings-value">100</span>
         </label>
+        <label class="settings-row">
+          <span>진동</span>
+          <input id="vibration-toggle" type="checkbox" />
+          <span class="settings-hint">모바일 브라우저에서만 동작</span>
+        </label>
         <button id="btn-settings-close" class="btn btn-primary btn-wide">닫기</button>
       </div>
     </div>
 
   </div>
 
-  <script src="js/catalog.js?v=8"></script>
+  <script src="js/catalog.js?v=9"></script>
   <!-- Same Firebase project as the Android app (lanedash-2cc5d), so scores set here land
        in the same shared "scores" collection / leaderboard. -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="js/leaderboard.js?v=1"></script>
-  <script src="js/audio.js?v=6"></script>
-  <script src="js/engine.js?v=10"></script>
-  <script src="js/render.js?v=8"></script>
-  <script src="js/main.js?v=8"></script>
+  <script src="js/audio.js?v=7"></script>
+  <script src="js/engine.js?v=11"></script>
+  <script src="js/render.js?v=9"></script>
+  <script src="js/main.js?v=9"></script>
 </body>
 </html>

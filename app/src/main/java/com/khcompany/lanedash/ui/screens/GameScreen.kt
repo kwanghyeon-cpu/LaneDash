@@ -1,5 +1,8 @@
 package com.khcompany.lanedash.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -46,6 +49,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.khcompany.lanedash.ads.AdManager
 import com.khcompany.lanedash.audio.SoundManager
 import com.khcompany.lanedash.game.CAR_X_UNITS
@@ -55,20 +61,41 @@ import com.khcompany.lanedash.game.EntityKind
 import com.khcompany.lanedash.game.GameEngine
 import com.khcompany.lanedash.game.GameOverReason
 import com.khcompany.lanedash.game.GameStatus
+import com.khcompany.lanedash.game.ItemType
 import com.khcompany.lanedash.game.LANE_COUNT
 import com.khcompany.lanedash.game.LeaderboardRepository
 import com.khcompany.lanedash.game.ObstacleVariant
 import com.khcompany.lanedash.game.WORLD_WIDTH_UNITS
 import com.khcompany.lanedash.game.laneSizeScale
+import com.khcompany.lanedash.haptics.HapticsManager
 import com.khcompany.lanedash.ui.components.drawCitySkyline
 import com.khcompany.lanedash.ui.components.drawCitySkylineSprite
 import com.khcompany.lanedash.ui.components.drawFuelCanItem
+import com.khcompany.lanedash.ui.components.drawMagnetAura
+import com.khcompany.lanedash.ui.components.drawMagnetItem
 import com.khcompany.lanedash.ui.components.drawObstacle
 import com.khcompany.lanedash.ui.components.drawRetroCar
 import com.khcompany.lanedash.ui.components.drawRoad
+import com.khcompany.lanedash.ui.components.drawShieldBubble
+import com.khcompany.lanedash.ui.components.drawShieldItem
 import com.khcompany.lanedash.ui.components.perspectiveY
 import com.khcompany.lanedash.ui.components.rememberOptionalSprite
+import kotlin.math.ceil
 import kotlin.math.roundToInt
+
+private const val WEB_PLAY_URL = "https://kwanghyeon-cpu.github.io/LaneDash/web/"
+private const val STORE_URL = "https://play.google.com/store/apps/details?id=com.khcompany.lanedash"
+
+private fun shareScore(context: Context, score: Int, best: Int, cityName: String) {
+    val text = "🚗💨 Lane Dash — ${cityName}에서 ${score}점! (내 최고 ${best}점)\n" +
+        "웹에서 바로 플레이 → $WEB_PLAY_URL\n" +
+        "Google Play → $STORE_URL"
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(send, "점수 공유하기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
 
 private const val SKY_FRACTION = 0.4f
 private const val MAX_FUEL_DISPLAY = 100f
@@ -81,6 +108,7 @@ fun GameScreen(
     city: CityTheme,
     car: CarOption,
     highScore: Int,
+    playsToday: Int,
     leaderboardRepository: LeaderboardRepository,
     adManager: AdManager,
     onScoreFinal: (Int) -> Unit,
@@ -92,7 +120,36 @@ fun GameScreen(
     val context = LocalContext.current
     val activity = context as? android.app.Activity
     val soundManager = remember { SoundManager(context) }
-    val engine = remember { GameEngine(onSfx = { soundManager.play(it) }) }
+    val haptics = remember { HapticsManager(context) }
+    val engine = remember {
+        GameEngine(onSfx = {
+            soundManager.play(it)
+            haptics.onEvent(it)
+        })
+    }
+    var toast by remember { mutableStateOf<String?>(null) }
+
+    // Leaving the app (home button, phone call, ad overlay) must not let the run keep going.
+    DisposableEffect(activity) {
+        val lifecycle = (activity as? ComponentActivity)?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) engine.pause()
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
+
+    LaunchedEffect(engine.paused) {
+        if (engine.paused) soundManager.pauseBgm() else soundManager.resumeBgm()
+    }
+
+    LaunchedEffect(engine.nearMissCount) {
+        if (engine.nearMissCount > 0) {
+            toast = "NEAR MISS!  +30"
+            kotlinx.coroutines.delay(900)
+            toast = null
+        }
+    }
     val carSprite = rememberOptionalSprite(car.spriteName)
     val citySprite = rememberOptionalSprite(city.spriteName)
     val obstacleSprites = ObstacleVariant.entries.associateWith { rememberOptionalSprite(it.spriteName) }
@@ -106,7 +163,7 @@ fun GameScreen(
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             soundManager.startBgm()
         }
-        engine.start()
+        engine.start(city.traits)
     }
 
     LaunchedEffect(engine.status) {
@@ -230,13 +287,23 @@ fun GameScreen(
             val drawables = mutableListOf<Pair<Float, () -> Unit>>()
             drawables.add(
                 animatedLane to {
+                    val carCenter = Offset(CAR_X_UNITS * pxPerUnit, playerCarY)
                     drawRetroCar(
                         car = car,
-                        center = Offset(CAR_X_UNITS * pxPerUnit, playerCarY),
+                        center = carCenter,
                         width = playerCarWidth,
                         height = playerCarHeight,
                         sprite = carSprite,
                     )
+                    if (engine.magnetTimeLeft > 0f) {
+                        drawMagnetAura(carCenter, playerCarWidth * 0.7f, playerCarHeight * 0.85f, engine.elapsedSeconds * 60f)
+                    }
+                    if (engine.shieldTimeLeft > 0f) {
+                        // Blinks during the last 1.5s so the player sees it about to run out.
+                        val ending = engine.shieldTimeLeft < 1.5f
+                        val alpha = if (ending && (engine.shieldTimeLeft * 8f).toInt() % 2 == 0) 0.3f else 1f
+                        drawShieldBubble(carCenter, playerCarWidth * 0.62f, playerCarHeight * 0.78f, alpha)
+                    }
                 },
             )
 
@@ -267,7 +334,15 @@ fun GameScreen(
                 } else {
                     val ey = (perspectiveY(entityLane, horizonY, roadHeight) + perspectiveY(entityLane + 1f, horizonY, roadHeight)) / 2f
                     val radius = entityCarHeight * 0.56f
-                    drawables.add(entityLane to { drawFuelCanItem(center = Offset(ex, ey), radius = radius) })
+                    drawables.add(
+                        entityLane to {
+                            when (entity.itemType) {
+                                ItemType.FUEL -> drawFuelCanItem(center = Offset(ex, ey), radius = radius)
+                                ItemType.SHIELD -> drawShieldItem(center = Offset(ex, ey), radius = radius)
+                                ItemType.MAGNET -> drawMagnetItem(center = Offset(ex, ey), radius = radius)
+                            }
+                        },
+                    )
                 }
             }
 
@@ -275,15 +350,45 @@ fun GameScreen(
         }
 
         // HUD: speed (top-left), fuel gauge (top-center), score + best (top-right).
-        val speedKmh = (engine.speed * 20f).roundToInt()
-        Text(
-            text = "$speedKmh KM/H",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
+        val speedKmh = (engine.effectiveSpeed * 20f).roundToInt()
+        Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(20.dp),
-        )
+        ) {
+            Text(
+                text = "$speedKmh KM/H",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (engine.shieldTimeLeft > 0f) {
+                Text(
+                    text = "🛡 방어막 ${ceil(engine.shieldTimeLeft).toInt()}초",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFF6FD6FF),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (engine.magnetTimeLeft > 0f) {
+                Text(
+                    text = "🧲 자석 ${ceil(engine.magnetTimeLeft).toInt()}초",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFFFF5A6E),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+
+        toast?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 64.dp),
+            )
+        }
 
         FuelGauge(
             fuelFraction = engine.fuel / MAX_FUEL_DISPLAY,
@@ -321,11 +426,36 @@ fun GameScreen(
             LaneButton(label = "▼", onClick = { engine.moveLaneDown() })
         }
 
+        if (engine.status == GameStatus.RUNNING && !engine.paused) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(24.dp),
+            ) {
+                LaneButton(label = "⏸", onClick = { engine.pause() })
+            }
+        }
+
+        if (engine.status == GameStatus.RUNNING && engine.paused) {
+            PauseOverlay(
+                vibrationEnabled = haptics.enabled,
+                onToggleVibration = { haptics.toggle(!haptics.enabled) },
+                onResume = { engine.resume() },
+                onRestart = { engine.start(city.traits) },
+                onExit = onExit,
+            )
+        }
+
         if (engine.status == GameStatus.GAME_OVER) {
             GameOverOverlay(
                 score = engine.score,
                 highScore = highScore,
                 reason = engine.gameOverReason,
+                runSeconds = engine.elapsedSeconds.toInt(),
+                nearMisses = engine.nearMissCount,
+                fuelCans = engine.fuelCollected,
+                playsToday = playsToday,
+                onShare = { shareScore(context, engine.score, maxOf(highScore, engine.score), city.displayName) },
                 leaderboardRepository = leaderboardRepository,
                 soundManager = soundManager,
                 canContinue = !engine.usedContinue && adManager.isRewardedReady,
@@ -334,7 +464,7 @@ fun GameScreen(
                         adManager.showRewarded(a, onReward = { engine.continueAfterAd() }, onUnavailable = {})
                     }
                 },
-                onRetry = { engine.start() },
+                onRetry = { engine.start(city.traits) },
                 onSubmitScore = onSubmitScore,
                 onViewLeaderboard = onViewLeaderboard,
                 onExit = onExit,
@@ -392,10 +522,90 @@ private fun LaneButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
+private fun PauseOverlay(
+    vibrationEnabled: Boolean,
+    onToggleVibration: () -> Unit,
+    onResume: () -> Unit,
+    onRestart: () -> Unit,
+    onExit: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 360.dp)
+                .fillMaxWidth(0.7f)
+                .heightIn(max = 340.dp)
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "일시정지",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Button(
+                onClick = onResume,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp),
+            ) {
+                Text(text = "계속하기", fontWeight = FontWeight.Bold)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onRestart,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = "다시 시작", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                }
+                Button(
+                    onClick = onExit,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = "HOME", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                }
+            }
+            Button(
+                onClick = onToggleVibration,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
+                Text(
+                    text = if (vibrationEnabled) "진동: 켜짐" else "진동: 꺼짐",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun GameOverOverlay(
     score: Int,
     highScore: Int,
     reason: GameOverReason?,
+    runSeconds: Int,
+    nearMisses: Int,
+    fuelCans: Int,
+    playsToday: Int,
+    onShare: () -> Unit,
     leaderboardRepository: LeaderboardRepository,
     soundManager: SoundManager,
     canContinue: Boolean,
@@ -406,14 +616,23 @@ private fun GameOverOverlay(
     onExit: () -> Unit,
 ) {
     var qualifies by remember { mutableStateOf<Boolean?>(null) }
+    var pointsToTop by remember { mutableStateOf<Int?>(null) }
     var submitted by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     LaunchedEffect(score) {
-        qualifies = try {
-            leaderboardRepository.qualifiesForTop(score)
+        val top = try {
+            leaderboardRepository.fetchTopScores(10)
         } catch (e: Exception) {
-            android.util.Log.e("Leaderboard", "qualifiesForTop failed", e)
-            false
+            android.util.Log.e("Leaderboard", "fetchTopScores failed", e)
+            null
+        }
+        // Same rule as LeaderboardRepository.qualifiesForTop, but keeping the list lets us
+        // also say how far a non-qualifying run was from the TOP 10 cutoff.
+        qualifies = top != null && (top.size < 10 || score > top.last().score)
+        pointsToTop = if (top != null && top.size >= 10 && score <= top.last().score) {
+            top.last().score - score + 1
+        } else {
+            null
         }
         if (qualifies == true) soundManager.playNewBest()
     }
@@ -463,6 +682,28 @@ private fun GameOverOverlay(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                val statStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp)
+                val statColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                Text(
+                    text = "생존 ${runSeconds}초 · 근접 회피 ${nearMisses}회 · 연료 ${fuelCans}개",
+                    style = statStyle,
+                    color = statColor,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                Text(
+                    text = "오늘 ${playsToday}번째 판",
+                    style = statStyle,
+                    color = statColor,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                pointsToTop?.let {
+                    Text(
+                        text = "TOP 10까지 ${it}점!",
+                        style = statStyle,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(20.dp))
@@ -515,14 +756,28 @@ private fun GameOverOverlay(
                         Text(text = "등록하기", fontWeight = FontWeight.Bold)
                     }
                 }
-                Button(
-                    onClick = onViewLeaderboard,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(text = "순위표 보기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Button(
+                        onClick = onViewLeaderboard,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = "순위표", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                    Button(
+                        onClick = onShare,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = "공유하기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
                 }
                 Row(
                     modifier = Modifier

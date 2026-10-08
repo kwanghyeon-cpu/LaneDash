@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 private const val TAG = "Leaderboard"
@@ -15,6 +18,8 @@ private const val TAG = "Leaderboard"
 private const val PREFS_NAME = "lane_dash_prefs"
 private const val KEY_HIGH_SCORE = "high_score"
 private const val KEY_GAMES_PLAYED = "games_played"
+private const val KEY_PLAYS_DAY = "plays_day"
+private const val KEY_PLAYS_TODAY = "plays_today"
 
 /** Show the game-over interstitial roughly this often, not on every single run. */
 private const val INTERSTITIAL_EVERY_N_GAMES = 10
@@ -41,6 +46,14 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
 
     private var gamesPlayed = prefs.getInt(KEY_GAMES_PLAYED, 0)
 
+    private fun todayKey(): String = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+
+    /** Completed runs today (resets at local midnight); shown on the game-over screen. */
+    var playsToday by mutableIntStateOf(
+        if (prefs.getString(KEY_PLAYS_DAY, null) == todayKey()) prefs.getInt(KEY_PLAYS_TODAY, 0) else 0,
+    )
+        private set
+
     fun reportScore(score: Int) {
         lastRunScore = score
         if (score > highScore) {
@@ -52,7 +65,12 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
     /** Call once per completed run. Returns true on every [INTERSTITIAL_EVERY_N_GAMES]th game. */
     fun onGameOverAndShouldShowInterstitial(): Boolean {
         gamesPlayed += 1
-        prefs.edit().putInt(KEY_GAMES_PLAYED, gamesPlayed).apply()
+        playsToday += 1
+        prefs.edit()
+            .putInt(KEY_GAMES_PLAYED, gamesPlayed)
+            .putString(KEY_PLAYS_DAY, todayKey())
+            .putInt(KEY_PLAYS_TODAY, playsToday)
+            .apply()
         return gamesPlayed % INTERSTITIAL_EVERY_N_GAMES == 0
     }
 

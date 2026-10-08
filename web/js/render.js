@@ -170,6 +170,103 @@ function drawFuelCanItem(ctx, cx, cy, radius) {
   ctx.restore();
 }
 
+/** Timed-invincibility pickup, drawn as a blue shield. Mirrors drawShieldItem in GameArt.kt. */
+function drawShieldItem(ctx, cx, cy, radius) {
+  const w = radius * 1.7, h = radius * 2.0;
+  const left = cx - w / 2, right = cx + w / 2, top = cy - h / 2;
+  const shield = () => {
+    ctx.beginPath();
+    ctx.moveTo(left, top + h * 0.1);
+    ctx.lineTo(right, top + h * 0.1);
+    ctx.lineTo(right, top + h * 0.55);
+    ctx.quadraticCurveTo(right, top + h * 0.88, cx, top + h);
+    ctx.quadraticCurveTo(left, top + h * 0.88, left, top + h * 0.55);
+    ctx.closePath();
+  };
+  ctx.fillStyle = '#3D8BFF';
+  shield();
+  ctx.fill();
+  ctx.save();
+  shield();
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.fillRect(left, top, w * 0.5, h);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(cx, top, w * 0.5, h);
+  ctx.restore();
+  ctx.strokeStyle = '#1A2340';
+  ctx.lineWidth = Math.max(1.5, radius * 0.14);
+  shield();
+  ctx.stroke();
+
+  const star = [
+    [0, -0.45], [0.14, -0.1], [0.5, -0.1], [0.2, 0.12], [0.32, 0.5],
+    [0, 0.27], [-0.32, 0.5], [-0.2, 0.12], [-0.5, -0.1], [-0.14, -0.1],
+  ];
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.beginPath();
+  star.forEach(([dx, dy], i) => {
+    const px = cx + dx * radius, py = cy + dy * radius;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Timed fuel-magnet pickup, drawn as a red horseshoe magnet. Mirrors drawMagnetItem in GameArt.kt. */
+function drawMagnetItem(ctx, cx, cy, radius) {
+  const arcR = radius * 0.62;
+  const stroke = Math.max(3, radius * 0.5);
+  const shift = radius * 0.2;
+  const legTop = cy - arcR * 0.95 + shift;
+  const legBottom = cy + shift;
+  ctx.lineWidth = stroke;
+  ctx.lineCap = 'butt';
+  ctx.strokeStyle = '#E63946';
+  ctx.beginPath();
+  ctx.arc(cx, cy + shift, arcR, 0, Math.PI);
+  ctx.stroke();
+  for (const sign of [-1, 1]) {
+    const x = cx + sign * arcR;
+    ctx.strokeStyle = '#E63946';
+    ctx.beginPath();
+    ctx.moveTo(x, legTop);
+    ctx.lineTo(x, legBottom);
+    ctx.stroke();
+    ctx.strokeStyle = '#E8ECF4';
+    ctx.beginPath();
+    ctx.moveTo(x, legTop);
+    ctx.lineTo(x, legTop + stroke * 0.95);
+    ctx.stroke();
+  }
+}
+
+/** Translucent bubble drawn around the player while the shield is active. */
+function drawShieldBubble(ctx, cx, cy, rx, ry, alpha) {
+  ctx.save();
+  ctx.fillStyle = `rgba(111,214,255,${0.2 * alpha})`;
+  ctx.strokeStyle = `rgba(189,235,255,${0.9 * alpha})`;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Dashed ring around the player while the fuel magnet is active; `phase` animates it. */
+function drawMagnetAura(ctx, cx, cy, rx, ry, phase) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,90,110,0.85)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([14, 10]);
+  ctx.lineDashOffset = -phase;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Draws one full game frame. `images` maps sprite path -> HTMLImageElement.
  * `animatedLane` is the (possibly mid-tween) lane the player car is drawn at.
@@ -218,7 +315,19 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
   // algorithm. The player car sorts in by its own (possibly mid-tween) lane too.
   const drawables = [{
     lane: animatedLane,
-    draw: () => drawFittedSprite(ctx, images[car.sprite], CAR_X_UNITS * pxPerUnit, playerCarY, playerCarWidth, playerCarHeight),
+    draw: () => {
+      const carX = CAR_X_UNITS * pxPerUnit;
+      drawFittedSprite(ctx, images[car.sprite], carX, playerCarY, playerCarWidth, playerCarHeight);
+      if (engine.magnetTimeLeft > 0) {
+        drawMagnetAura(ctx, carX, playerCarY, playerCarWidth * 0.7, playerCarHeight * 0.85, engine.elapsedSeconds * 60);
+      }
+      if (engine.shieldTimeLeft > 0) {
+        // Blinks during the last 1.5s so the player sees it about to run out.
+        const ending = engine.shieldTimeLeft < 1.5;
+        const alpha = ending && Math.floor(engine.shieldTimeLeft * 8) % 2 === 0 ? 0.3 : 1;
+        drawShieldBubble(ctx, carX, playerCarY, playerCarWidth * 0.62, playerCarHeight * 0.78, alpha);
+      }
+    },
   }];
 
   const cullMargin = baseCarWidth * 8;
@@ -236,7 +345,10 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
     } else {
       const ey = (perspectiveY(entity.lane, horizonY, roadHeight) + perspectiveY(entity.lane + 1, horizonY, roadHeight)) / 2;
       const radius = entityCarHeight * 0.56;
-      drawables.push({ lane: entity.lane, draw: () => drawFuelCanItem(ctx, ex, ey, radius) });
+      const drawItem = entity.itemType === 'SHIELD' ? drawShieldItem
+        : entity.itemType === 'MAGNET' ? drawMagnetItem
+        : drawFuelCanItem;
+      drawables.push({ lane: entity.lane, draw: () => drawItem(ctx, ex, ey, radius) });
     }
   }
 

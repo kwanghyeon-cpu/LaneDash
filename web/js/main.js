@@ -76,6 +76,40 @@ function preloadImage(path) {
 
 const audio = new AudioManager();
 
+// ---------- VIBRATION ----------
+// Short buzzes on crashes / pickups where the browser supports it (mostly Android Chrome);
+// mirrors HapticsManager.kt. Silently does nothing elsewhere.
+const VIBRATION_KEY = 'lane_dash_vibration';
+let vibrationEnabled = localStorage.getItem(VIBRATION_KEY) !== 'off';
+const VIBRATION_MS = { CRASH: 220, FUEL_EMPTY: 120, NEAR_MISS: 25, COIN: 25, POWERUP: 25, SHIELD_HIT: 25 };
+
+function vibrateFor(event) {
+  const ms = VIBRATION_MS[event];
+  if (!vibrationEnabled || !ms || !navigator.vibrate) return;
+  navigator.vibrate(ms);
+}
+
+// Shared game-over / share constants — keep in sync with GameScreen.kt.
+const WEB_PLAY_URL = 'https://kwanghyeon-cpu.github.io/LaneDash/web/';
+const STORE_URL = 'https://play.google.com/store/apps/details?id=com.khcompany.lanedash';
+
+// Completed runs today (resets at local midnight), shown on the game-over card.
+const PLAYS_DAY_KEY = 'lane_dash_plays_day';
+const PLAYS_TODAY_KEY = 'lane_dash_plays_today';
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function recordPlayAndGetToday() {
+  const today = todayKey();
+  const count = (localStorage.getItem(PLAYS_DAY_KEY) === today ? Number(localStorage.getItem(PLAYS_TODAY_KEY) || 0) : 0) + 1;
+  localStorage.setItem(PLAYS_DAY_KEY, today);
+  localStorage.setItem(PLAYS_TODAY_KEY, String(count));
+  return count;
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -95,12 +129,21 @@ const sfxVolumeInput = document.getElementById('sfx-volume');
 const bgmVolumeValue = document.getElementById('bgm-volume-value');
 const sfxVolumeValue = document.getElementById('sfx-volume-value');
 
+const vibrationToggle = document.getElementById('vibration-toggle');
+
 function syncSettingsUI() {
   bgmVolumeInput.value = Math.round(audio.bgmVolume * 100);
   sfxVolumeInput.value = Math.round(audio.sfxVolume * 100);
   bgmVolumeValue.textContent = bgmVolumeInput.value;
   sfxVolumeValue.textContent = sfxVolumeInput.value;
+  vibrationToggle.checked = vibrationEnabled;
 }
+
+vibrationToggle.addEventListener('change', () => {
+  vibrationEnabled = vibrationToggle.checked;
+  localStorage.setItem(VIBRATION_KEY, vibrationEnabled ? 'on' : 'off');
+  if (vibrationEnabled && navigator.vibrate) navigator.vibrate(30);
+});
 
 document.getElementById('btn-settings').addEventListener('click', () => {
   audio.unlock();
@@ -143,6 +186,7 @@ function buildCityGrid() {
       <div class="thumb"><canvas width="300" height="231"></canvas></div>
       <p class="name">${city.name}</p>
       <p class="name-en">${city.nameEn}</p>
+      <p class="trait">${city.traitText}</p>
     `;
     card.addEventListener('click', () => {
       state.selectedCityId = city.id;
@@ -217,14 +261,20 @@ let engine = null;
 let animatedLane = Math.floor(LANE_COUNT / 2);
 let lastFrameTime = 0;
 let rafId = null;
+let lastNearMissCount = 0;
 
 function startGame() {
   showScreen('screen-game');
   document.getElementById('gameover-overlay').classList.add('hidden');
+  document.getElementById('pause-overlay').classList.add('hidden');
 
-  engine = new GameEngine((event) => audio.play(event));
-  engine.start();
+  engine = new GameEngine((event) => {
+    audio.play(event);
+    vibrateFor(event);
+  });
+  engine.start(cityById(state.selectedCityId).traits);
   animatedLane = engine.laneIndex;
+  lastNearMissCount = 0;
   audio.startBgm();
 
   lastFrameTime = performance.now();
@@ -256,9 +306,29 @@ function loop(now) {
   rafId = requestAnimationFrame(loop);
 }
 
+function setPowerupChip(id, timeLeft, label) {
+  const el = document.getElementById(id);
+  el.classList.toggle('hidden', timeLeft <= 0);
+  if (timeLeft > 0) el.textContent = `${label} ${Math.ceil(timeLeft)}초`;
+}
+
+function showToast(text) {
+  const el = document.getElementById('hud-toast');
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth; // restart the CSS animation if it's already mid-flight
+  el.classList.add('show');
+}
+
 function updateHud() {
-  const speedKmh = Math.round(engine.speed * 20);
+  const speedKmh = Math.round(engine.effectiveSpeed * 20);
   document.getElementById('hud-speed').textContent = `${speedKmh} KM/H`;
+  setPowerupChip('hud-shield', engine.shieldTimeLeft, '🛡 방어막');
+  setPowerupChip('hud-magnet', engine.magnetTimeLeft, '🧲 자석');
+  if (engine.nearMissCount > lastNearMissCount) showToast('NEAR MISS!  +30');
+  lastNearMissCount = engine.nearMissCount;
+  document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
+  document.getElementById('pause-overlay').classList.toggle('hidden', !(engine.status === 'RUNNING' && engine.paused));
   document.getElementById('hud-score').textContent = `SCORE ${engine.score}`;
   document.getElementById('hud-best').textContent = `BEST ${state.highScore}`;
   const fuelPct = Math.max(0, Math.min(100, engine.fuel));
@@ -282,6 +352,10 @@ function showGameOver() {
   document.getElementById('gameover-score').textContent = `SCORE ${engine.score}`;
   document.getElementById('gameover-best').textContent =
     engine.score >= state.highScore ? 'NEW BEST!' : `BEST ${state.highScore}`;
+  document.getElementById('gameover-stats').textContent =
+    `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회 · 연료 ${engine.fuelCollected}개`;
+  document.getElementById('gameover-plays').textContent = `오늘 ${recordPlayAndGetToday()}번째 판`;
+  document.getElementById('gameover-top').textContent = '';
 
   const qualifyBlock = document.getElementById('gameover-qualify');
   qualifyBlock.classList.add('hidden');
@@ -293,16 +367,41 @@ function showGameOver() {
   document.getElementById('gameover-overlay').classList.remove('hidden');
 
   const score = engine.score;
-  qualifiesForTop(score)
-    .then(qualifies => {
+  // Same rule as qualifiesForTop in leaderboard.js, but keeping the list lets us also say
+  // how far a non-qualifying run was from the TOP 10 cutoff.
+  fetchTopScores(10)
+    .then(top => {
       if (score !== lastRunScore) return; // a retry/new run started while this was in flight
+      const qualifies = top.length < 10 || score > top[top.length - 1].score;
       if (qualifies) {
         qualifyBlock.classList.remove('hidden');
         audio.play('NEW_BEST');
+      } else {
+        document.getElementById('gameover-top').textContent =
+          `TOP 10까지 ${top[top.length - 1].score - score + 1}점!`;
       }
     })
-    .catch(e => console.error('qualifiesForTop failed', e));
+    .catch(e => console.error('fetchTopScores failed', e));
 }
+
+document.getElementById('btn-share').addEventListener('click', async () => {
+  const best = Math.max(state.highScore, lastRunScore);
+  const city = cityById(state.selectedCityId);
+  const text = `🚗💨 Lane Dash — ${city.name}에서 ${lastRunScore}점! (내 최고 ${best}점)\n` +
+    `웹에서 바로 플레이 → ${WEB_PLAY_URL}\nGoogle Play → ${STORE_URL}`;
+  const btn = document.getElementById('btn-share');
+  try {
+    if (navigator.share) {
+      await navigator.share({ text });
+    } else {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = '복사됨!';
+      setTimeout(() => { btn.textContent = '공유하기'; }, 1500);
+    }
+  } catch (e) {
+    if (e && e.name !== 'AbortError') console.error('share failed', e);
+  }
+});
 
 document.getElementById('btn-submit-score').addEventListener('click', () => {
   const submitBtn = document.getElementById('btn-submit-score');
@@ -327,9 +426,43 @@ document.getElementById('btn-view-leaderboard').addEventListener('click', () => 
 
 document.getElementById('btn-retry').addEventListener('click', () => {
   document.getElementById('gameover-overlay').classList.add('hidden');
-  engine.start();
+  restartRun();
+});
+
+function restartRun() {
+  engine.start(cityById(state.selectedCityId).traits);
+  lastNearMissCount = 0;
   lastFrameTime = performance.now();
+  if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(loop);
+}
+
+// ---------- PAUSE ----------
+function pauseGame() {
+  if (!engine || engine.status !== 'RUNNING' || engine.paused) return;
+  engine.pause();
+  audio.pauseBgm();
+}
+
+function resumeGame() {
+  if (!engine || !engine.paused) return;
+  engine.resume();
+  audio.resumeBgm();
+  lastFrameTime = performance.now();
+}
+
+document.getElementById('btn-pause').addEventListener('click', pauseGame);
+document.getElementById('btn-resume').addEventListener('click', resumeGame);
+document.getElementById('btn-pause-restart').addEventListener('click', () => {
+  document.getElementById('pause-overlay').classList.add('hidden');
+  audio.resumeBgm();
+  restartRun();
+});
+document.getElementById('btn-pause-home').addEventListener('click', goHome);
+
+// A hidden tab throttles requestAnimationFrame, so pause instead of letting the run drift.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame();
 });
 
 document.getElementById('btn-gameover-home').addEventListener('click', goHome);
@@ -338,6 +471,7 @@ function goHome() {
   audio.stopBgm();
   if (rafId) cancelAnimationFrame(rafId);
   document.getElementById('gameover-overlay').classList.add('hidden');
+  document.getElementById('pause-overlay').classList.add('hidden');
   refreshHomeBest();
   showScreen('screen-home');
 }
@@ -393,6 +527,9 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
     e.preventDefault();
     engine.moveLaneDown();
+  } else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+    e.preventDefault();
+    if (engine.paused) resumeGame(); else pauseGame();
   }
 });
 

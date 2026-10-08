@@ -49,6 +49,24 @@ enum class GameStatus { READY, RUNNING, GAME_OVER }
 
 enum class EntityKind { OBSTACLE, ITEM }
 
+/** What a pickup does: refuel, a timed invincibility shield, or a timed fuel magnet. */
+enum class ItemType { FUEL, SHIELD, MAGNET }
+
+/**
+ * Per-city gameplay tuning. Harder cities give a score bonus so picking them is worth it
+ * on the shared leaderboard. Mirrors CITIES[].traits in the web build's catalog.js.
+ */
+data class RunTraits(
+    val speed: Float = 1f,
+    val fuelDrain: Float = 1f,
+    val spawnDensity: Float = 1f,
+    val score: Float = 1f,
+) {
+    companion object {
+        val DEFAULT = RunTraits()
+    }
+}
+
 /**
  * Obstacle sub-appearance; items are always a fuel-can pickup.
  * [hitWidthScale] and [heightScale] control how big the sprite is DRAWN (see GameScreen's
@@ -86,6 +104,8 @@ data class RoadEntity(
     var x: Float,
     val kind: EntityKind,
     val obstacleVariant: ObstacleVariant = ObstacleVariant.CONE,
+    val itemType: ItemType = ItemType.FUEL,
+    var nearMissAwarded: Boolean = false,
 )
 
 data class CityTheme(
@@ -106,6 +126,9 @@ data class CityTheme(
      * gradient + building silhouettes.
      */
     val spriteName: String = "",
+    val traits: RunTraits = RunTraits.DEFAULT,
+    /** One-line summary of [traits] shown on the city select card. */
+    val traitText: String = "",
 )
 
 /**
@@ -146,6 +169,7 @@ object GameCatalog {
             roadColor = Color(0xFF241830),
             roadLineColor = Color(0xFFFFD166),
             spriteName = "city_seoul",
+            traitText = "균형 잡힌 기본 코스",
         ),
         CityTheme(
             id = "tokyo",
@@ -159,6 +183,8 @@ object GameCatalog {
             roadColor = Color(0xFF0D0620),
             roadLineColor = Color(0xFFFF2E92),
             spriteName = "city_tokyo",
+            traits = RunTraits(speed = 1.15f),
+            traitText = "속도 +15%",
         ),
         CityTheme(
             id = "newyork",
@@ -172,6 +198,8 @@ object GameCatalog {
             roadColor = Color(0xFF3A2E28),
             roadLineColor = Color(0xFFFFF3B0),
             spriteName = "city_newyork",
+            traits = RunTraits(spawnDensity = 1.25f, score = 1.1f),
+            traitText = "교통량 +25% · 점수 +10%",
         ),
         CityTheme(
             id = "paris",
@@ -185,6 +213,8 @@ object GameCatalog {
             roadColor = Color(0xFF4A4038),
             roadLineColor = Color(0xFFFFFFFF),
             spriteName = "city_paris",
+            traits = RunTraits(fuelDrain = 1.3f, score = 1.1f),
+            traitText = "연료 소모 +30% · 점수 +10%",
         ),
     )
 

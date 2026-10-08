@@ -113,6 +113,7 @@ html, body {
 .pick-card .thumb canvas { width: 100%; height: 100%; display: block; }
 .pick-card .name { margin: 6px 0 0; font-size: 14px; }
 .pick-card .name-en { margin: 0; font-size: 10px; opacity: 0.6; }
+.pick-card .trait { margin: 2px 0 0; font-size: 11px; color: var(--primary); }
 
 /* ---------- GAME ---------- */
 #screen-game { background: #000; }
@@ -194,6 +195,45 @@ html, body {
 .gameover-reason { color: rgba(244,239,255,0.7); margin: 4px 0 0; font-size: 14px; }
 .gameover-score { color: var(--on-bg); font-size: 20px; margin: 14px 0 0; }
 .gameover-best { color: var(--primary); margin: 4px 0 0; font-size: 14px; }
+
+.gameover-stat { color: rgba(244,239,255,0.75); margin: 2px 0 0; font-size: 13px; }
+.gameover-stat:empty { display: none; }
+.gameover-top { color: var(--secondary); }
+
+.hud-left { display: flex; flex-direction: column; gap: 4px; }
+.hud-powerup { font-size: 14px; font-weight: bold; }
+.hud-powerup.hidden { display: none; }
+.hud-shield { color: #6FD6FF; }
+.hud-magnet { color: #FF5A6E; }
+
+.hud-toast {
+  position: absolute;
+  top: 64px; left: 0; right: 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--secondary);
+  pointer-events: none;
+  opacity: 0;
+}
+.hud-toast.show { animation: toast-pop 0.9s ease-out; }
+@keyframes toast-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(0.9); }
+  15% { opacity: 1; transform: translateY(0) scale(1.05); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+.pause-btn { position: absolute; left: 20px; bottom: 44px; width: 48px; height: 48px; }
+.pause-btn.hidden { display: none; }
+.pause-card {
+  width: min(320px, 86%);
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+}
+.pause-title { margin: 0 0 8px; color: var(--primary); font-size: 22px; }
 
 .overlay-btn {
   display: block;
@@ -298,6 +338,8 @@ html, body {
 }
 .settings-row span:first-child { width: 64px; flex-shrink: 0; }
 .settings-row input[type="range"] { flex: 1; accent-color: var(--primary); }
+.settings-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+.settings-hint { font-size: 11px; opacity: 0.55; }
 .settings-value { width: 30px; text-align: right; color: var(--on-bg); opacity: 0.8; flex-shrink: 0; }
 
 @media (max-width: 700px) {
