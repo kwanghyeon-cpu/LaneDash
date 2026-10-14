@@ -6,6 +6,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -289,6 +290,9 @@ fun DrawScope.drawCarSprite(sprite: ImageBitmap, center: Offset, width: Float, h
         image = sprite,
         dstOffset = IntOffset(left.toInt(), top.toInt()),
         dstSize = IntSize(drawWidth.toInt().coerceAtLeast(1), drawHeight.toInt().coerceAtLeast(1)),
+        // Sprites are drawn at a fraction of their file size; mipmapped sampling keeps the
+        // minified pixel art from shimmering as it scrolls.
+        filterQuality = FilterQuality.Medium,
     )
 }
 

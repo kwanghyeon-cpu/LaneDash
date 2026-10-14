@@ -2,6 +2,7 @@ package com.khcompany.lanedash.ads
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,11 @@ private const val TAG = "AdManager"
 private const val INTERSTITIAL_UNIT_ID = "ca-app-pub-4172722948933624/4089165611"
 private const val REWARDED_UNIT_ID = "ca-app-pub-4172722948933624/3760581296"
 
+// Google's official sample units, used for debuggable builds so development and testing
+// never generate real impressions/clicks on the live ad units (an AdMob policy risk).
+private const val TEST_INTERSTITIAL_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+private const val TEST_REWARDED_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+
 /**
  * Thin wrapper around the Google Mobile Ads SDK: an interstitial for the occasional
  * game-over screen, and a rewarded ad for the one-per-run "continue" option. Always keeps
@@ -31,6 +37,9 @@ private const val REWARDED_UNIT_ID = "ca-app-pub-4172722948933624/3760581296"
  */
 class AdManager(context: Context) {
     private val appContext = context.applicationContext
+    private val debuggable = (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    private val interstitialUnitId = if (debuggable) TEST_INTERSTITIAL_UNIT_ID else INTERSTITIAL_UNIT_ID
+    private val rewardedUnitId = if (debuggable) TEST_REWARDED_UNIT_ID else REWARDED_UNIT_ID
     private var interstitialAd: InterstitialAd? = null
     private var rewardedAd: RewardedAd? = null
     private var sdkInitialized = false
@@ -51,7 +60,7 @@ class AdManager(context: Context) {
     private fun loadInterstitial() {
         InterstitialAd.load(
             appContext,
-            INTERSTITIAL_UNIT_ID,
+            interstitialUnitId,
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
@@ -69,7 +78,7 @@ class AdManager(context: Context) {
     private fun loadRewarded() {
         RewardedAd.load(
             appContext,
-            REWARDED_UNIT_ID,
+            rewardedUnitId,
             AdRequest.Builder().build(),
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {

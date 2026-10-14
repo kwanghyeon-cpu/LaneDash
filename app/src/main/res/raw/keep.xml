@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sprites are looked up by name at runtime (getIdentifier), which the resource shrinker
+     can't see, so it would strip them from release builds. Keep them explicitly. -->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/city_*,@drawable/car_gen*,@drawable/obstacle_*,@drawable/home_background" />

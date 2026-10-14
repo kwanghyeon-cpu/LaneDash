@@ -26,8 +26,8 @@ android {
         applicationId = "com.khcompany.lanedash"
         minSdk = 26
         targetSdk = 37
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -48,8 +48,14 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // R8 code shrinking/optimization — an unoptimized Compose release build is
+            // noticeably slower. Sprites are looked up by name at runtime (getIdentifier),
+            // so res/raw/keep.xml pins them against resource shrinking.
             optimization {
-                enable = false
+                enable = true
+                keepRules {
+                    files.add(project.file("proguard-rules.pro"))
+                }
             }
         }
     }

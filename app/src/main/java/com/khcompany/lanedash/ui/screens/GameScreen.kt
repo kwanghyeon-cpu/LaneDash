@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -78,13 +79,19 @@ import com.khcompany.lanedash.ui.components.drawRetroCar
 import com.khcompany.lanedash.ui.components.drawRoad
 import com.khcompany.lanedash.ui.components.drawShieldBubble
 import com.khcompany.lanedash.ui.components.drawShieldItem
+import com.khcompany.lanedash.ui.components.SpriteCache
 import com.khcompany.lanedash.ui.components.perspectiveY
-import com.khcompany.lanedash.ui.components.rememberOptionalSprite
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 private const val WEB_PLAY_URL = "https://kwanghyeon-cpu.github.io/LaneDash/web/"
 private const val STORE_URL = "https://play.google.com/store/apps/details?id=com.khcompany.lanedash"
+
+private class LoadedSprites(
+    val car: ImageBitmap?,
+    val city: ImageBitmap?,
+    val obstacles: Map<ObstacleVariant, ImageBitmap?>,
+)
 
 private fun shareScore(context: Context, score: Int, best: Int, cityName: String) {
     val text = "🚗💨 Lane Dash — ${cityName}에서 ${score}점! (내 최고 ${best}점)\n" +
@@ -150,20 +157,25 @@ fun GameScreen(
             toast = null
         }
     }
-    val carSprite = rememberOptionalSprite(car.spriteName)
-    val citySprite = rememberOptionalSprite(city.spriteName)
-    val obstacleSprites = ObstacleVariant.entries.associateWith { rememberOptionalSprite(it.spriteName) }
+    // Sprites decode off the UI thread (see SpriteCache); the run only starts once they're
+    // all in, so the player never sees procedural placeholder art flash before the real one.
+    var sprites by remember { mutableStateOf<LoadedSprites?>(null) }
 
     DisposableEffect(Unit) {
         onDispose { soundManager.release() }
     }
 
     LaunchedEffect(Unit) {
+        sprites = LoadedSprites(
+            car = SpriteCache.load(context, car.spriteName),
+            city = SpriteCache.load(context, city.spriteName),
+            obstacles = ObstacleVariant.entries.associateWith { SpriteCache.load(context, it.spriteName) },
+        )
+        engine.start(city.traits)
         // MediaPlayer.create() decodes synchronously — keep it off the UI thread.
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             soundManager.startBgm()
         }
-        engine.start(city.traits)
     }
 
     LaunchedEffect(engine.status) {
@@ -220,6 +232,14 @@ fun GameScreen(
                     )
                 },
         ) {
+            val loaded = sprites
+            if (loaded == null) {
+                drawRect(color = Color.Black)
+                return@Canvas
+            }
+            val carSprite = loaded.car
+            val citySprite = loaded.city
+            val obstacleSprites = loaded.obstacles
             val horizonY = size.height * SKY_FRACTION
             val roadHeight = size.height - horizonY
             val laneHeight = roadHeight / LANE_COUNT
@@ -350,34 +370,9 @@ fun GameScreen(
         }
 
         // HUD: speed (top-left), fuel gauge (top-center), score + best (top-right).
-        val speedKmh = (engine.effectiveSpeed * 20f).roundToInt()
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(20.dp),
-        ) {
-            Text(
-                text = "$speedKmh KM/H",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            if (engine.shieldTimeLeft > 0f) {
-                Text(
-                    text = "🛡 방어막 ${ceil(engine.shieldTimeLeft).toInt()}초",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF6FD6FF),
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (engine.magnetTimeLeft > 0f) {
-                Text(
-                    text = "🧲 자석 ${ceil(engine.magnetTimeLeft).toInt()}초",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFFF5A6E),
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
+        // Each HUD piece reads its engine state inside its own composable, so a per-frame
+        // value change recomposes just that small piece instead of this whole screen.
+        SpeedHud(engine, modifier = Modifier.align(Alignment.TopStart))
 
         toast?.let {
             Text(
@@ -391,29 +386,13 @@ fun GameScreen(
         }
 
         FuelGauge(
-            fuelFraction = engine.fuel / MAX_FUEL_DISPLAY,
+            fuelFraction = { engine.fuel / MAX_FUEL_DISPLAY },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 20.dp),
         )
 
-        Column(
-            horizontalAlignment = Alignment.End,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(20.dp),
-        ) {
-            Text(
-                text = "SCORE ${engine.score}",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "BEST $highScore",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-        }
+        ScoreHud(engine, highScore, modifier = Modifier.align(Alignment.TopEnd))
 
         // Lane controls, in addition to swipe.
         Column(
@@ -474,8 +453,52 @@ fun GameScreen(
 }
 
 @Composable
-private fun FuelGauge(fuelFraction: Float, modifier: Modifier = Modifier) {
-    val fraction = fuelFraction.coerceIn(0f, 1f)
+private fun SpeedHud(engine: GameEngine, modifier: Modifier = Modifier) {
+    val speedKmh = (engine.effectiveSpeed * 20f).roundToInt()
+    Column(modifier = modifier.padding(20.dp)) {
+        Text(
+            text = "$speedKmh KM/H",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        if (engine.shieldTimeLeft > 0f) {
+            Text(
+                text = "🛡 방어막 ${ceil(engine.shieldTimeLeft).toInt()}초",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFF6FD6FF),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (engine.magnetTimeLeft > 0f) {
+            Text(
+                text = "🧲 자석 ${ceil(engine.magnetTimeLeft).toInt()}초",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFFFF5A6E),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScoreHud(engine: GameEngine, highScore: Int, modifier: Modifier = Modifier) {
+    Column(horizontalAlignment = Alignment.End, modifier = modifier.padding(20.dp)) {
+        Text(
+            text = "SCORE ${engine.score}",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = "BEST $highScore",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+}
+
+@Composable
+private fun FuelGauge(fuelFraction: () -> Float, modifier: Modifier = Modifier) {
+    val fraction = fuelFraction().coerceIn(0f, 1f)
     val barColor = when {
         fraction > 0.5f -> Color(0xFF4CAF50)
         fraction > 0.2f -> Color(0xFFFFC93C)
