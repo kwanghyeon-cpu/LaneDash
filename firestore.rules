@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global leaderboard. The app only ever (a) reads the top N scores and (b) adds a new
+    // {name, score} entry; it never edits or deletes one.
+    match /scores/{scoreId} {
+      allow get: if true;
+
+      // Top-N queries only (the app asks for 10), so the whole collection can't be dumped.
+      allow list: if request.query.limit <= 50;
+
+      allow create: if request.resource.data.keys().hasOnly(['name', 'score'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() >= 1
+                    && request.resource.data.name.size() <= 12
+                    && request.resource.data.score is int
+                    && request.resource.data.score >= 0
+                    && request.resource.data.score <= 1000000;
+
+      allow update, delete: if false;
+    }
+
+    // Everything else stays closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
