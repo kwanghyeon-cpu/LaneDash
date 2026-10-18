@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -372,7 +375,9 @@ fun GameScreen(
         // HUD: speed (top-left), fuel gauge (top-center), score + best (top-right).
         // Each HUD piece reads its engine state inside its own composable, so a per-frame
         // value change recomposes just that small piece instead of this whole screen.
-        SpeedHud(engine, modifier = Modifier.align(Alignment.TopStart))
+        // Corner HUD elements stay clear of display cutouts (camera notch/punch-hole) now that
+        // the game draws edge-to-edge; the insets are zero on screens without a cutout.
+        SpeedHud(engine, modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.displayCutout))
 
         toast?.let {
             Text(
@@ -392,12 +397,13 @@ fun GameScreen(
                 .padding(top = 20.dp),
         )
 
-        ScoreHud(engine, highScore, modifier = Modifier.align(Alignment.TopEnd))
+        ScoreHud(engine, highScore, modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.displayCutout))
 
         // Lane controls, in addition to swipe.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .windowInsetsPadding(WindowInsets.displayCutout)
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -409,6 +415,7 @@ fun GameScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.displayCutout)
                     .padding(24.dp),
             ) {
                 LaneButton(label = "⏸", onClick = { engine.pause() })
