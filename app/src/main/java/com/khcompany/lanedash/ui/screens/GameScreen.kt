@@ -46,9 +46,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -72,9 +74,17 @@ import com.khcompany.lanedash.game.ObstacleVariant
 import com.khcompany.lanedash.game.WORLD_WIDTH_UNITS
 import com.khcompany.lanedash.game.laneSizeScale
 import com.khcompany.lanedash.haptics.HapticsManager
+import com.khcompany.lanedash.ui.components.FOG_ALPHA_PER_LANE
 import com.khcompany.lanedash.ui.components.drawCitySkyline
 import com.khcompany.lanedash.ui.components.drawCitySkylineSprite
+import com.khcompany.lanedash.ui.components.drawCurbs
 import com.khcompany.lanedash.ui.components.drawFuelCanItem
+import com.khcompany.lanedash.ui.components.drawGroundShadow
+import com.khcompany.lanedash.ui.components.drawLampPosts
+import com.khcompany.lanedash.ui.components.drawRoadHaze
+import com.khcompany.lanedash.ui.components.drawSpeedStreaks
+import com.khcompany.lanedash.ui.components.fittedHeight
+import com.khcompany.lanedash.ui.components.fittedWidth
 import com.khcompany.lanedash.ui.components.drawMagnetAura
 import com.khcompany.lanedash.ui.components.drawMagnetItem
 import com.khcompany.lanedash.ui.components.drawObstacle
@@ -89,6 +99,26 @@ import kotlin.math.roundToInt
 
 private const val WEB_PLAY_URL = "https://kwanghyeon-cpu.github.io/LaneDash/web/"
 private const val STORE_URL = "https://play.google.com/store/apps/details?id=com.khcompany.lanedash"
+
+/**
+ * Safety net for devices we can't benchmark: if frames run slow for a stretch, the purely
+ * decorative effects (haze, lamps, streaks, fog veils) switch off for the rest of the session.
+ * Shadows, curbs and the car tilt are cheap enough to always keep. Mirrors fxState in render.js.
+ */
+private class FxQuality {
+    var low = false
+        private set
+    private var ema = 1f / 60f
+
+    fun onFrame(dt: Float, runSeconds: Float) {
+        ema = ema * 0.95f + dt * 0.05f
+        if (!low && runSeconds > 3f && ema > SLOW_FRAME_SECONDS) low = true
+    }
+
+    private companion object {
+        const val SLOW_FRAME_SECONDS = 0.024f // ~42 fps
+    }
+}
 
 private class LoadedSprites(
     val car: ImageBitmap?,
@@ -109,6 +139,9 @@ private fun shareScore(context: Context, score: Int, best: Int, cityName: String
 
 private const val SKY_FRACTION = 0.4f
 private const val MAX_FUEL_DISPLAY = 100f
+
+/** Mirrors GameEngine.MAX_SPEED (private there); only used to scale the speed streaks. */
+private const val MAX_SPEED_FOR_FX = 16f
 
 /** Extra size bump applied to every obstacle/rival-vehicle sprite (1.5x, then 2x, then another 1.5x). */
 private const val OBSTACLE_SCALE = 4.5f
@@ -163,6 +196,7 @@ fun GameScreen(
     // Sprites decode off the UI thread (see SpriteCache); the run only starts once they're
     // all in, so the player never sees procedural placeholder art flash before the real one.
     var sprites by remember { mutableStateOf<LoadedSprites?>(null) }
+    val fx = remember { FxQuality() }
 
     DisposableEffect(Unit) {
         onDispose { soundManager.release() }
@@ -189,6 +223,7 @@ fun GameScreen(
                     if (lastFrameNanos >= 0L) {
                         val dt = (frameNanos - lastFrameNanos) / 1_000_000_000f
                         engine.tick(dt)
+                        if (!engine.paused) fx.onFrame(dt.coerceAtMost(0.05f), engine.elapsedSeconds)
                     }
                     lastFrameNanos = frameNanos
                 }
@@ -271,6 +306,13 @@ fun GameScreen(
                 worldWidthUnits = WORLD_WIDTH_UNITS,
                 distanceUnits = engine.distance,
             )
+            val fancy = !fx.low
+            if (fancy) drawRoadHaze(city, horizonY)
+            drawCurbs(horizonY, pxPerUnit, engine.distance)
+            if (fancy) {
+                drawLampPosts(horizonY, pxPerUnit, engine.distance)
+                drawSpeedStreaks(horizonY, pxPerUnit, engine.distance, (engine.speed / MAX_SPEED_FOR_FX).coerceIn(0f, 1f))
+            }
 
             // Baseline (old uniform-lane-equivalent) car size — each entity scales this by its
             // own lane's perspective size (laneSizeScale, Model.kt) so farther lanes read
@@ -311,13 +353,24 @@ fun GameScreen(
             drawables.add(
                 animatedLane to {
                     val carCenter = Offset(CAR_X_UNITS * pxPerUnit, playerCarY)
-                    drawRetroCar(
-                        car = car,
-                        center = carCenter,
-                        width = playerCarWidth,
-                        height = playerCarHeight,
-                        sprite = carSprite,
+                    val carBottom = playerCarY + playerCarHeight / 2f
+                    drawGroundShadow(
+                        cx = carCenter.x,
+                        bottomY = carBottom,
+                        width = fittedWidth(carSprite, playerCarWidth, playerCarHeight),
+                        height = fittedHeight(carSprite, playerCarWidth, playerCarHeight),
                     )
+                    // The nose leans toward the direction of a lane change, pivoting on the wheels.
+                    val tilt = ((engine.laneIndex - animatedLane) * 5.2f).coerceIn(-6.9f, 6.9f)
+                    withTransform({ rotate(tilt, pivot = Offset(carCenter.x, carBottom)) }) {
+                        drawRetroCar(
+                            car = car,
+                            center = carCenter,
+                            width = playerCarWidth,
+                            height = playerCarHeight,
+                            sprite = carSprite,
+                        )
+                    }
                     if (engine.magnetTimeLeft > 0f) {
                         drawMagnetAura(carCenter, playerCarWidth * 0.7f, playerCarHeight * 0.85f, engine.elapsedSeconds * 60f)
                     }
@@ -345,6 +398,13 @@ fun GameScreen(
                     val ey = laneBottomY(entityLane) - obstacleHeight / 2f
                     drawables.add(
                         entityLane to {
+                            val obstacleSprite = obstacleSprites[entity.obstacleVariant]
+                            drawGroundShadow(
+                                cx = ex,
+                                bottomY = ey + obstacleHeight / 2f,
+                                width = fittedWidth(obstacleSprite, obstacleWidth, obstacleHeight),
+                                height = fittedHeight(obstacleSprite, obstacleWidth, obstacleHeight),
+                            )
                             drawObstacle(
                                 variant = entity.obstacleVariant,
                                 center = Offset(ex, ey),
@@ -359,6 +419,7 @@ fun GameScreen(
                     val radius = entityCarHeight * 0.56f
                     drawables.add(
                         entityLane to {
+                            drawGroundShadow(ex, ey + radius * 1.05f, radius * 1.7f, radius * 1.2f, alpha = 0.3f)
                             when (entity.itemType) {
                                 ItemType.FUEL -> drawFuelCanItem(center = Offset(ex, ey), radius = radius)
                                 ItemType.SHIELD -> drawShieldItem(center = Offset(ex, ey), radius = radius)
@@ -369,7 +430,23 @@ fun GameScreen(
                 }
             }
 
-            for ((_, draw) in drawables.sortedBy { it.first }) draw()
+            // Paint lane by lane, far to near, laying a thin veil of city haze over everything
+            // drawn so far after each lane. The farthest lane ends up under the most veils
+            // (hazier, softer), the nearest under none — atmospheric perspective for the price
+            // of a few translucent rects.
+            val sorted = drawables.sortedBy { it.first }
+            var next = 0
+            val veil = city.haze.copy(alpha = FOG_ALPHA_PER_LANE)
+            for (lane in 0 until LANE_COUNT) {
+                while (next < sorted.size && sorted[next].first.roundToInt() <= lane) sorted[next++].second()
+                if (fancy && lane < LANE_COUNT - 1) {
+                    drawRect(
+                        color = veil,
+                        topLeft = Offset(0f, horizonY),
+                        size = Size(size.width, perspectiveY(lane + 1f, horizonY, roadHeight) - horizonY),
+                    )
+                }
+            }
         }
 
         // HUD: speed (top-left), fuel gauge (top-center), score + best (top-right).

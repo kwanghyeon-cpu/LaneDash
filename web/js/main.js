@@ -288,6 +288,7 @@ function loop(now) {
 
   if (engine.status === 'RUNNING') {
     engine.tick(dt);
+    if (!engine.paused) updateFxQuality(dt, engine.elapsedSeconds);
   }
 
   // Lane tween, similar feel to the app's 160ms animateFloatAsState.

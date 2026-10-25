@@ -267,6 +267,126 @@ function drawMagnetAura(ctx, cx, cy, rx, ry, phase) {
   ctx.restore();
 }
 
+// ---------- Depth cues (mirror GameArt.kt: drawGroundShadow / drawCurbs / drawLampPosts /
+// drawRoadHaze / drawSpeedStreaks). Everything here is flat rects/ellipses/gradients — no
+// blur, no offscreen layers — so the per-frame cost stays tiny. ----------
+
+/** Each lane's veil of city haze; stacked, so the farthest lane reads the hazier. */
+const FOG_ALPHA_PER_LANE = 0.075;
+
+// Safety net for devices we can't benchmark: if frames run slow for a stretch, the purely
+// decorative effects (haze, lamps, streaks, fog veils) switch off for the rest of the session.
+// Shadows, curbs and the car tilt are cheap enough to always keep. Mirrors FxQuality in GameScreen.kt.
+const fxState = { low: false, ema: 1 / 60 };
+const FX_SLOW_FRAME_SECONDS = 0.024; // ~42 fps
+function updateFxQuality(dt, runSeconds) {
+  fxState.ema = fxState.ema * 0.95 + dt * 0.05;
+  if (!fxState.low && runSeconds > 3 && fxState.ema > FX_SLOW_FRAME_SECONDS) fxState.low = true;
+}
+
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/** The size drawFittedSprite will actually draw an image at inside a box. */
+function fittedSize(img, boxW, boxH) {
+  if (!img || !img.naturalWidth) return { w: boxW, h: boxH };
+  const aspect = img.naturalWidth / img.naturalHeight;
+  let w = boxW, h = boxW / aspect;
+  if (h > boxH) { h = boxH; w = boxH * aspect; }
+  return { w, h };
+}
+
+/** Soft elliptical shadow on the asphalt — anchors a vehicle/pickup to the road. */
+function drawGroundShadow(ctx, cx, bottomY, width, height, alpha = 0.38) {
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(cx, bottomY - height * 0.05, width * 0.5, Math.max(2, height * 0.075), 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Far-end haze (road melts into the skyline) and a darker near edge (vignette). */
+// The gradient objects never change within a run, so they're built once (re-made only when
+// the city or canvas size changes) and reused every frame. Measured: reusing them is the
+// cheapest option — pre-rendering the layer to an offscreen canvas/ImageBitmap and blitting
+// it was several times slower.
+let hazeCache = { key: '', far: 0, nearTop: 0, hz: null, vg: null };
+
+function drawRoadHaze(ctx, city, w, horizonY, roadHeight) {
+  const key = `${city.id}|${w}|${Math.round(horizonY)}|${Math.round(roadHeight)}`;
+  if (hazeCache.key !== key) {
+    const far = roadHeight * 0.42;
+    const nearTop = horizonY + roadHeight * 0.72;
+    const hz = ctx.createLinearGradient(0, horizonY, 0, horizonY + far);
+    hz.addColorStop(0, hexA(city.haze, 0.55));
+    hz.addColorStop(1, hexA(city.haze, 0));
+    const vg = ctx.createLinearGradient(0, nearTop, 0, horizonY + roadHeight);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.38)');
+    hazeCache = { key, far, nearTop, hz, vg };
+  }
+  ctx.fillStyle = hazeCache.hz;
+  ctx.fillRect(0, horizonY, w, hazeCache.far);
+  ctx.fillStyle = hazeCache.vg;
+  ctx.fillRect(0, hazeCache.nearTop, w, horizonY + roadHeight - hazeCache.nearTop);
+}
+
+/** Rumble-strip curbs on both road edges; the near one scrolls faster than the far one. */
+function drawCurbs(ctx, w, horizonY, roadHeight, pxPerUnit, distance) {
+  const topH = Math.max(3, roadHeight * 0.014);
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fillRect(0, horizonY, w, topH);
+  const farBlock = 1.1 * pxPerUnit;
+  const farOff = mod(distance * pxPerUnit * 0.9, farBlock * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  for (let x = -farOff; x < w; x += farBlock * 2) ctx.fillRect(x, horizonY, farBlock, topH);
+
+  const botH = Math.max(3, roadHeight * 0.013);
+  const y = horizonY + roadHeight - botH;
+  ctx.fillStyle = 'rgba(255,255,255,0.20)';
+  ctx.fillRect(0, y, w, botH);
+  const nearBlock = 2.2 * pxPerUnit;
+  const nearOff = mod(distance * pxPerUnit * 1.7, nearBlock * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  for (let x = -nearOff; x < w; x += nearBlock * 2) ctx.fillRect(x, y, nearBlock, botH);
+}
+
+/** Street lamps standing on the far curb; they scroll faster than the skyline (parallax). */
+function drawLampPosts(ctx, w, horizonY, roadHeight, pxPerUnit, distance) {
+  const spacing = 4.5 * pxPerUnit;
+  const off = mod(distance * pxPerUnit * 0.85, spacing);
+  const poleH = roadHeight * 0.16;
+  const poleW = Math.max(2, roadHeight * 0.009);
+  const top = horizonY - poleH * 0.72;
+  for (let x = -off; x < w + spacing; x += spacing) {
+    ctx.fillStyle = 'rgba(12,8,24,0.72)';
+    ctx.fillRect(x, top, poleW, poleH);
+    ctx.fillRect(x - poleW * 3, top, poleW * 4, poleW * 1.1);
+    ctx.fillStyle = 'rgba(255,214,120,0.85)';
+    ctx.fillRect(x - poleW * 3, top + poleW * 1.1, poleW * 2.6, poleW * 0.9);
+  }
+}
+
+/** Thin streaks racing past on the asphalt; stronger the faster the car goes. */
+function drawSpeedStreaks(ctx, w, horizonY, roadHeight, pxPerUnit, distance, speedFactor) {
+  if (speedFactor < 0.2) return;
+  ctx.lineCap = 'butt';
+  for (let i = 0; i < 10; i++) {
+    const fy = (i * 0.6180339) % 1;
+    const y = horizonY + roadHeight * (0.12 + 0.86 * fy);
+    const len = (0.9 + (i % 3) * 0.5) * pxPerUnit * (0.5 + speedFactor);
+    const k = 2.2 + (i % 4) * 0.4;
+    const x = mod(i * w * 0.173 - distance * pxPerUnit * k, w + len) - len;
+    ctx.strokeStyle = `rgba(255,255,255,${(0.05 + 0.16 * speedFactor * (0.4 + fy)).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, roadHeight * 0.004 * (0.4 + fy));
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + len, y);
+    ctx.stroke();
+  }
+}
+
 /**
  * Draws one full game frame. `images` maps sprite path -> HTMLImageElement.
  * `animatedLane` is the (possibly mid-tween) lane the player car is drawn at.
@@ -287,6 +407,13 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
   }
 
   drawRoad(ctx, city, LANE_COUNT, horizonY, canvasWidth, canvasHeight, WORLD_WIDTH_UNITS, engine.distance);
+  const fancy = !fxState.low;
+  if (fancy) drawRoadHaze(ctx, city, canvasWidth, horizonY, roadHeight);
+  drawCurbs(ctx, canvasWidth, horizonY, roadHeight, pxPerUnit, engine.distance);
+  if (fancy) {
+    drawLampPosts(ctx, canvasWidth, horizonY, roadHeight, pxPerUnit, engine.distance);
+    drawSpeedStreaks(ctx, canvasWidth, horizonY, roadHeight, pxPerUnit, engine.distance, Math.min(1, engine.speed / MAX_SPEED));
+  }
 
   // Baseline (old uniform-lane-equivalent) car size — each entity scales this by its own
   // lane's perspective size (laneSizeScale, engine.js) so farther lanes read smaller, and
@@ -317,7 +444,17 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
     lane: animatedLane,
     draw: () => {
       const carX = CAR_X_UNITS * pxPerUnit;
-      drawFittedSprite(ctx, images[car.sprite], carX, playerCarY, playerCarWidth, playerCarHeight);
+      const carBottom = playerCarY + playerCarHeight / 2;
+      const carImg = images[car.sprite];
+      const fs = fittedSize(carImg, playerCarWidth, playerCarHeight);
+      drawGroundShadow(ctx, carX, carBottom, fs.w, fs.h);
+      // The nose leans toward the direction of a lane change, pivoting on the wheels.
+      const tilt = Math.max(-0.12, Math.min(0.12, (engine.laneIndex - animatedLane) * 0.09));
+      ctx.save();
+      ctx.translate(carX, carBottom);
+      ctx.rotate(tilt);
+      drawFittedSprite(ctx, carImg, 0, -playerCarHeight / 2, playerCarWidth, playerCarHeight);
+      ctx.restore();
       if (engine.magnetTimeLeft > 0) {
         drawMagnetAura(ctx, carX, playerCarY, playerCarWidth * 0.7, playerCarHeight * 0.85, engine.elapsedSeconds * 60);
       }
@@ -341,17 +478,41 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
       const w = entityCarWidth * 0.85 * OBSTACLE_SCALE * entity.variant.hitWidthScale;
       const h = entityCarHeight * 0.95 * OBSTACLE_SCALE * entity.variant.heightScale;
       const ey = laneBottomY(entity.lane) - h / 2;
-      drawables.push({ lane: entity.lane, draw: () => drawFittedSprite(ctx, images[entity.variant.sprite], ex, ey, w, h) });
+      drawables.push({
+        lane: entity.lane,
+        draw: () => {
+          const img = images[entity.variant.sprite];
+          const fs = fittedSize(img, w, h);
+          drawGroundShadow(ctx, ex, ey + h / 2, fs.w, fs.h);
+          drawFittedSprite(ctx, img, ex, ey, w, h);
+        },
+      });
     } else {
       const ey = (perspectiveY(entity.lane, horizonY, roadHeight) + perspectiveY(entity.lane + 1, horizonY, roadHeight)) / 2;
       const radius = entityCarHeight * 0.56;
       const drawItem = entity.itemType === 'SHIELD' ? drawShieldItem
         : entity.itemType === 'MAGNET' ? drawMagnetItem
         : drawFuelCanItem;
-      drawables.push({ lane: entity.lane, draw: () => drawItem(ctx, ex, ey, radius) });
+      drawables.push({
+        lane: entity.lane,
+        draw: () => {
+          drawGroundShadow(ctx, ex, ey + radius * 1.05, radius * 1.7, radius * 1.2, 0.3);
+          drawItem(ctx, ex, ey, radius);
+        },
+      });
     }
   }
 
+  // Paint lane by lane, far to near, laying a thin veil of city haze over everything drawn so
+  // far after each lane. The farthest lane ends up under the most veils (hazier, softer), the
+  // nearest under none — atmospheric perspective for the price of a few translucent rects.
   drawables.sort((a, b) => a.lane - b.lane);
-  for (const d of drawables) d.draw();
+  let next = 0;
+  for (let lane = 0; lane < LANE_COUNT; lane++) {
+    while (next < drawables.length && Math.round(drawables[next].lane) <= lane) drawables[next++].draw();
+    if (fancy && lane < LANE_COUNT - 1) {
+      ctx.fillStyle = hexA(city.haze, FOG_ALPHA_PER_LANE);
+      ctx.fillRect(0, horizonY, canvasWidth, perspectiveY(lane + 1, horizonY, roadHeight) - horizonY);
+    }
+  }
 }

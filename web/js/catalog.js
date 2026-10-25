@@ -11,6 +11,9 @@ const CITIES = [
     skyTop: '#2E1A47', skyBottom: '#FF8C69',
     roadColor: '#241830', roadLineColor: '#FFD166',
     sprite: 'assets/cities/city_seoul.png',
+    // Haze matches each skyline sprite's horizon color (the procedural sky colors above don't
+    // match the sprites) — used for the far-lane fog and road haze in render.js.
+    haze: '#D58E86',
     // Per-city tuning, mirrors RunTraits / traitText in Model.kt.
     traits: { speed: 1, fuelDrain: 1, spawnDensity: 1, score: 1 },
     traitText: '균형 잡힌 기본 코스',
@@ -20,6 +23,7 @@ const CITIES = [
     skyTop: '#05021A', skyBottom: '#1B0F3D',
     roadColor: '#0D0620', roadLineColor: '#FF2E92',
     sprite: 'assets/cities/city_tokyo.png',
+    haze: '#9EC4E6',
     traits: { speed: 1.15, fuelDrain: 1, spawnDensity: 1, score: 1 },
     traitText: '속도 +15%',
   },
@@ -28,6 +32,7 @@ const CITIES = [
     skyTop: '#FF9A56', skyBottom: '#FFD56B',
     roadColor: '#3A2E28', roadLineColor: '#FFF3B0',
     sprite: 'assets/cities/city_newyork.png',
+    haze: '#8EBDE8',
     traits: { speed: 1, fuelDrain: 1, spawnDensity: 1.25, score: 1.1 },
     traitText: '교통량 +25% · 점수 +10%',
   },
@@ -36,6 +41,7 @@ const CITIES = [
     skyTop: '#BFE3FF', skyBottom: '#F6E7D8',
     roadColor: '#4A4038', roadLineColor: '#FFFFFF',
     sprite: 'assets/cities/city_paris.png',
+    haze: '#1B2641',
     traits: { speed: 1, fuelDrain: 1.3, spawnDensity: 1, score: 1.1 },
     traitText: '연료 소모 +30% · 점수 +10%',
   },

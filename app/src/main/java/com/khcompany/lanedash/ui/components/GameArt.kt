@@ -25,6 +25,8 @@ import com.khcompany.lanedash.game.PERSPECTIVE_MIN_SCALE
 import com.khcompany.lanedash.game.PERSPECTIVE_TOTAL
 import com.khcompany.lanedash.game.perspectiveCumulative
 import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.max
 
 /** One repeating skyline tile, hand-tuned for a pleasant irregular silhouette. */
 private data class BuildingSpec(
@@ -931,6 +933,132 @@ fun DrawScope.drawMagnetAura(center: Offset, radiusX: Float, radiusY: Float, pha
         size = size,
         style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f), phase)),
     )
+}
+
+// ---------- Depth cues (mirror render.js). Everything is flat rects/ovals/gradients — no blur,
+// no offscreen layers (saveLayer) — so the per-frame cost stays tiny. ----------
+
+/** Each lane's veil of city haze; stacked, so the farthest lane ends up the hazier. */
+const val FOG_ALPHA_PER_LANE = 0.075f
+
+private fun floorMod(a: Float, b: Float): Float = a - floor(a / b) * b
+
+/** The size drawCarSprite will actually draw a sprite at inside a box (width-first fit). */
+fun fittedWidth(sprite: ImageBitmap?, boxW: Float, boxH: Float): Float {
+    if (sprite == null) return boxW
+    val aspect = sprite.width.toFloat() / sprite.height.toFloat()
+    return if (boxW / aspect > boxH) boxH * aspect else boxW
+}
+
+fun fittedHeight(sprite: ImageBitmap?, boxW: Float, boxH: Float): Float {
+    if (sprite == null) return boxH
+    val aspect = sprite.width.toFloat() / sprite.height.toFloat()
+    return if (boxW / aspect > boxH) boxH else boxW / aspect
+}
+
+/** Soft elliptical shadow on the asphalt — anchors a vehicle/pickup to the road. */
+fun DrawScope.drawGroundShadow(cx: Float, bottomY: Float, width: Float, height: Float, alpha: Float = 0.38f) {
+    val rx = width * 0.5f
+    val ry = max(2f, height * 0.075f)
+    drawOval(
+        color = Color.Black.copy(alpha = alpha),
+        topLeft = Offset(cx - rx, bottomY - height * 0.05f - ry),
+        size = Size(rx * 2f, ry * 2f),
+    )
+}
+
+// Gradient brushes never change within a run, so they're built once and reused (re-made only
+// when the city or canvas size changes) instead of allocating new shaders every frame.
+private var hazeKey = ""
+private var hazeFarBrush: Brush? = null
+private var hazeNearBrush: Brush? = null
+
+/** Far-end haze (the road melts into the skyline) and a darker near edge (vignette). */
+fun DrawScope.drawRoadHaze(city: CityTheme, horizonY: Float) {
+    val roadHeight = size.height - horizonY
+    val key = "${city.id}|${size.width.toInt()}|${horizonY.toInt()}|${roadHeight.toInt()}"
+    val far = roadHeight * 0.42f
+    val nearTop = horizonY + roadHeight * 0.72f
+    if (hazeKey != key) {
+        hazeFarBrush = Brush.verticalGradient(
+            colors = listOf(city.haze.copy(alpha = 0.55f), city.haze.copy(alpha = 0f)),
+            startY = horizonY,
+            endY = horizonY + far,
+        )
+        hazeNearBrush = Brush.verticalGradient(
+            colors = listOf(Color.Black.copy(alpha = 0f), Color.Black.copy(alpha = 0.38f)),
+            startY = nearTop,
+            endY = horizonY + roadHeight,
+        )
+        hazeKey = key
+    }
+    drawRect(brush = hazeFarBrush!!, topLeft = Offset(0f, horizonY), size = Size(size.width, far))
+    drawRect(brush = hazeNearBrush!!, topLeft = Offset(0f, nearTop), size = Size(size.width, horizonY + roadHeight - nearTop))
+}
+
+/** Rumble-strip curbs on both road edges; the near one scrolls faster than the far one. */
+fun DrawScope.drawCurbs(horizonY: Float, pxPerUnit: Float, distance: Float) {
+    val w = size.width
+    val roadHeight = size.height - horizonY
+    val topH = max(3f, roadHeight * 0.014f)
+    drawRect(Color.White.copy(alpha = 0.22f), Offset(0f, horizonY), Size(w, topH))
+    val farBlock = 1.1f * pxPerUnit
+    var x = -floorMod(distance * pxPerUnit * 0.9f, farBlock * 2f)
+    val farColor = Color.Black.copy(alpha = 0.28f)
+    while (x < w) {
+        drawRect(farColor, Offset(x, horizonY), Size(farBlock, topH))
+        x += farBlock * 2f
+    }
+
+    val botH = max(3f, roadHeight * 0.013f)
+    val y = horizonY + roadHeight - botH
+    drawRect(Color.White.copy(alpha = 0.20f), Offset(0f, y), Size(w, botH))
+    val nearBlock = 2.2f * pxPerUnit
+    x = -floorMod(distance * pxPerUnit * 1.7f, nearBlock * 2f)
+    val nearColor = Color.Black.copy(alpha = 0.45f)
+    while (x < w) {
+        drawRect(nearColor, Offset(x, y), Size(nearBlock, botH))
+        x += nearBlock * 2f
+    }
+}
+
+/** Street lamps standing on the far curb; they scroll faster than the skyline (parallax). */
+fun DrawScope.drawLampPosts(horizonY: Float, pxPerUnit: Float, distance: Float) {
+    val w = size.width
+    val roadHeight = size.height - horizonY
+    val spacing = 4.5f * pxPerUnit
+    val poleH = roadHeight * 0.16f
+    val poleW = max(2f, roadHeight * 0.009f)
+    val top = horizonY - poleH * 0.72f
+    val pole = Color(0xFF0C0818).copy(alpha = 0.72f)
+    val lamp = Color(0xFFFFD678).copy(alpha = 0.85f)
+    var x = -floorMod(distance * pxPerUnit * 0.85f, spacing)
+    while (x < w + spacing) {
+        drawRect(pole, Offset(x, top), Size(poleW, poleH))
+        drawRect(pole, Offset(x - poleW * 3f, top), Size(poleW * 4f, poleW * 1.1f))
+        drawRect(lamp, Offset(x - poleW * 3f, top + poleW * 1.1f), Size(poleW * 2.6f, poleW * 0.9f))
+        x += spacing
+    }
+}
+
+/** Thin streaks racing past on the asphalt; stronger the faster the car goes. */
+fun DrawScope.drawSpeedStreaks(horizonY: Float, pxPerUnit: Float, distance: Float, speedFactor: Float) {
+    if (speedFactor < 0.2f) return
+    val w = size.width
+    val roadHeight = size.height - horizonY
+    for (i in 0 until 10) {
+        val fy = (i * 0.6180339f) % 1f
+        val y = horizonY + roadHeight * (0.12f + 0.86f * fy)
+        val len = (0.9f + (i % 3) * 0.5f) * pxPerUnit * (0.5f + speedFactor)
+        val k = 2.2f + (i % 4) * 0.4f
+        val x = floorMod(i * w * 0.173f - distance * pxPerUnit * k, w + len) - len
+        drawLine(
+            color = Color.White.copy(alpha = 0.05f + 0.16f * speedFactor * (0.4f + fy)),
+            start = Offset(x, y),
+            end = Offset(x + len, y),
+            strokeWidth = max(1f, roadHeight * 0.004f * (0.4f + fy)),
+        )
+    }
 }
 
 private val SEDAN_PALETTE = CarOption(

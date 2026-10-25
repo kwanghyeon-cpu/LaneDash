@@ -126,6 +126,11 @@ data class CityTheme(
      * gradient + building silhouettes.
      */
     val spriteName: String = "",
+    /**
+     * Horizon color of the skyline sprite (the procedural sky colors above don't match the
+     * sprites) — tints the far-lane fog and road haze. Mirrors `haze` in the web catalog.js.
+     */
+    val haze: Color = Color(0xFF8E83B5),
     val traits: RunTraits = RunTraits.DEFAULT,
     /** One-line summary of [traits] shown on the city select card. */
     val traitText: String = "",
@@ -169,6 +174,7 @@ object GameCatalog {
             roadColor = Color(0xFF241830),
             roadLineColor = Color(0xFFFFD166),
             spriteName = "city_seoul",
+            haze = Color(0xFFD58E86),
             traitText = "균형 잡힌 기본 코스",
         ),
         CityTheme(
@@ -183,6 +189,7 @@ object GameCatalog {
             roadColor = Color(0xFF0D0620),
             roadLineColor = Color(0xFFFF2E92),
             spriteName = "city_tokyo",
+            haze = Color(0xFF9EC4E6),
             traits = RunTraits(speed = 1.15f),
             traitText = "속도 +15%",
         ),
@@ -198,6 +205,7 @@ object GameCatalog {
             roadColor = Color(0xFF3A2E28),
             roadLineColor = Color(0xFFFFF3B0),
             spriteName = "city_newyork",
+            haze = Color(0xFF8EBDE8),
             traits = RunTraits(spawnDensity = 1.25f, score = 1.1f),
             traitText = "교통량 +25% · 점수 +10%",
         ),
@@ -213,6 +221,7 @@ object GameCatalog {
             roadColor = Color(0xFF4A4038),
             roadLineColor = Color(0xFFFFFFFF),
             spriteName = "city_paris",
+            haze = Color(0xFF1B2641),
             traits = RunTraits(fuelDrain = 1.3f, score = 1.1f),
             traitText = "연료 소모 +30% · 점수 +10%",
         ),
