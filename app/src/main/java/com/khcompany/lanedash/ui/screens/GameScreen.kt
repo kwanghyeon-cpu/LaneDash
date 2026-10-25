@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -71,10 +73,15 @@ import com.khcompany.lanedash.game.ItemType
 import com.khcompany.lanedash.game.LANE_COUNT
 import com.khcompany.lanedash.game.LeaderboardRepository
 import com.khcompany.lanedash.game.ObstacleVariant
+import com.khcompany.lanedash.game.VEHICLE_WIDTH_PER_METER
 import com.khcompany.lanedash.game.WORLD_WIDTH_UNITS
 import com.khcompany.lanedash.game.laneSizeScale
 import com.khcompany.lanedash.haptics.HapticsManager
 import com.khcompany.lanedash.ui.components.FOG_ALPHA_PER_LANE
+import com.khcompany.lanedash.ui.components.GameIcon
+import com.khcompany.lanedash.ui.components.MAGNET_ITEM_COLOR
+import com.khcompany.lanedash.ui.components.SHIELD_ITEM_COLOR
+import com.khcompany.lanedash.ui.components.vector
 import com.khcompany.lanedash.ui.components.drawCitySkyline
 import com.khcompany.lanedash.ui.components.drawCitySkylineSprite
 import com.khcompany.lanedash.ui.components.drawCurbs
@@ -335,13 +342,16 @@ fun GameScreen(
                 return bottom - (bottom - top) * 0.06f
             }
 
-            // The player's own car is drawn larger (3x baseline — the original 2x bumped another
-            // 1.5x, then scaled 0.7x ahead of release) but bottom-anchored, so only its
-            // base/wheels need to sit inside the current lane — the rest is free to overlap the
-            // lane above.
-            val playerCarHeight = laneCarHeight(animatedLane) * 3f * 0.49f
-            val playerCarWidth = laneCarWidth(animatedLane) * 3f * 0.49f
+            // Vehicle widths come from real-world lengths (CarOption/ObstacleVariant.lengthMeters)
+            // on one shared scale, so the player's car and the traffic are in true proportion;
+            // each sprite's own aspect ratio then sets its height. The box height only needs to
+            // be generous enough not to clamp any sprite (every vehicle is wider than 1.7:1).
+            // The car is bottom-anchored, so only its wheels need to sit inside the current lane.
+            val playerCarWidth = laneCarWidth(animatedLane) * car.lengthMeters * VEHICLE_WIDTH_PER_METER
+            val playerCarHeight = playerCarWidth / 1.7f
             val playerCarY = laneBottomY(animatedLane) - playerCarHeight / 2f
+            val playerSpriteHeight = fittedHeight(carSprite, playerCarWidth, playerCarHeight)
+            val playerSpriteWidth = fittedWidth(carSprite, playerCarWidth, playerCarHeight)
 
             // Oversized sprites (OBSTACLE_SCALE) spill into neighboring lanes, so draw order
             // has to follow lane depth or a far-lane sprite can wrongly paint over a near-lane
@@ -354,11 +364,13 @@ fun GameScreen(
                 animatedLane to {
                     val carCenter = Offset(CAR_X_UNITS * pxPerUnit, playerCarY)
                     val carBottom = playerCarY + playerCarHeight / 2f
+                    // Center of the car's visible body (the sprite sits on the bottom of its box).
+                    val bodyCenter = Offset(carCenter.x, carBottom - playerSpriteHeight / 2f)
                     drawGroundShadow(
                         cx = carCenter.x,
                         bottomY = carBottom,
-                        width = fittedWidth(carSprite, playerCarWidth, playerCarHeight),
-                        height = fittedHeight(carSprite, playerCarWidth, playerCarHeight),
+                        width = playerSpriteWidth,
+                        height = playerSpriteHeight,
                     )
                     // The nose leans toward the direction of a lane change, pivoting on the wheels.
                     val tilt = ((engine.laneIndex - animatedLane) * 5.2f).coerceIn(-6.9f, 6.9f)
@@ -372,13 +384,13 @@ fun GameScreen(
                         )
                     }
                     if (engine.magnetTimeLeft > 0f) {
-                        drawMagnetAura(carCenter, playerCarWidth * 0.7f, playerCarHeight * 0.85f, engine.elapsedSeconds * 60f)
+                        drawMagnetAura(bodyCenter, playerSpriteWidth * 0.62f, playerSpriteHeight * 0.95f, engine.elapsedSeconds * 60f)
                     }
                     if (engine.shieldTimeLeft > 0f) {
                         // Blinks during the last 1.5s so the player sees it about to run out.
                         val ending = engine.shieldTimeLeft < 1.5f
                         val alpha = if (ending && (engine.shieldTimeLeft * 8f).toInt() % 2 == 0) 0.3f else 1f
-                        drawShieldBubble(carCenter, playerCarWidth * 0.62f, playerCarHeight * 0.78f, alpha)
+                        drawShieldBubble(bodyCenter, playerSpriteWidth * 0.58f, playerSpriteHeight * 0.85f, alpha)
                     }
                 },
             )
@@ -393,8 +405,17 @@ fun GameScreen(
                 if (entity.kind == EntityKind.OBSTACLE) {
                     // Scale width/height by the same per-variant factor the hitbox uses,
                     // so e.g. a bus's crash zone matches how much wider it's actually drawn.
-                    val obstacleWidth = entityCarWidth * 0.85f * OBSTACLE_SCALE * entity.obstacleVariant.hitWidthScale
-                    val obstacleHeight = entityCarHeight * 0.95f * OBSTACLE_SCALE * entity.obstacleVariant.heightScale
+                    val variant = entity.obstacleVariant
+                    val obstacleWidth: Float
+                    val obstacleHeight: Float
+                    if (variant.lengthMeters > 0f) {
+                        // Vehicles: true-to-scale width from real length; height follows the sprite.
+                        obstacleWidth = entityCarWidth * variant.lengthMeters * VEHICLE_WIDTH_PER_METER
+                        obstacleHeight = obstacleWidth / 1.7f
+                    } else {
+                        obstacleWidth = entityCarWidth * 0.85f * OBSTACLE_SCALE * variant.hitWidthScale
+                        obstacleHeight = entityCarHeight * 0.95f * OBSTACLE_SCALE * variant.heightScale
+                    }
                     val ey = laneBottomY(entityLane) - obstacleHeight / 2f
                     drawables.add(
                         entityLane to {
@@ -484,8 +505,8 @@ fun GameScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            LaneButton(label = "▲", onClick = { engine.moveLaneUp() })
-            LaneButton(label = "▼", onClick = { engine.moveLaneDown() })
+            LaneButton(icon = GameIcon.CARET_UP, description = "위 차선", onClick = { engine.moveLaneUp() })
+            LaneButton(icon = GameIcon.CARET_DOWN, description = "아래 차선", onClick = { engine.moveLaneDown() })
         }
 
         if (engine.status == GameStatus.RUNNING && !engine.paused) {
@@ -495,7 +516,7 @@ fun GameScreen(
                     .windowInsetsPadding(WindowInsets.displayCutout)
                     .padding(24.dp),
             ) {
-                LaneButton(label = "⏸", onClick = { engine.pause() })
+                LaneButton(icon = GameIcon.PAUSE, description = "일시정지", onClick = { engine.pause() })
             }
         }
 
@@ -540,24 +561,30 @@ fun GameScreen(
 private fun SpeedHud(engine: GameEngine, modifier: Modifier = Modifier) {
     val speedKmh = (engine.effectiveSpeed * 20f).roundToInt()
     Column(modifier = modifier.padding(20.dp)) {
-        Text(
+        HudIconText(
+            icon = GameIcon.GAUGE,
             text = "$speedKmh KM/H",
-            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.titleLarge,
+            iconSize = 24,
         )
         if (engine.shieldTimeLeft > 0f) {
-            Text(
-                text = "🛡 방어막 ${ceil(engine.shieldTimeLeft).toInt()}초",
+            HudIconText(
+                icon = GameIcon.SHIELD,
+                text = "방어막 ${ceil(engine.shieldTimeLeft).toInt()}초",
+                color = SHIELD_ITEM_COLOR,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF6FD6FF),
+                iconSize = 18,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
         if (engine.magnetTimeLeft > 0f) {
-            Text(
-                text = "🧲 자석 ${ceil(engine.magnetTimeLeft).toInt()}초",
+            HudIconText(
+                icon = GameIcon.MAGNET,
+                text = "자석 ${ceil(engine.magnetTimeLeft).toInt()}초",
+                color = MAGNET_ITEM_COLOR,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFFF5A6E),
+                iconSize = 18,
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
@@ -589,10 +616,12 @@ private fun FuelGauge(fuelFraction: () -> Float, modifier: Modifier = Modifier) 
         else -> Color(0xFFE63946)
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Text(
+        HudIconText(
+            icon = GameIcon.GAS_PUMP,
             text = "FUEL",
-            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+            style = MaterialTheme.typography.bodyLarge,
+            iconSize = 16,
         )
         Box(
             modifier = Modifier
@@ -614,7 +643,7 @@ private fun FuelGauge(fuelFraction: () -> Float, modifier: Modifier = Modifier) 
 }
 
 @Composable
-private fun LaneButton(label: String, onClick: () -> Unit) {
+private fun LaneButton(icon: GameIcon, description: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         shape = CircleShape,
@@ -624,7 +653,31 @@ private fun LaneButton(label: String, onClick: () -> Unit) {
         modifier = Modifier.size(56.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
     ) {
-        Text(text = label, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+        Icon(
+            imageVector = icon.vector,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(26.dp),
+        )
+    }
+}
+
+/** Small leading icon + bold label, used inside buttons. */
+@Composable
+private fun ButtonLabel(icon: GameIcon, text: String, color: Color = Color.Unspecified) {
+    val tint = if (color == Color.Unspecified) LocalContentColor.current else color
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Icon(imageVector = icon.vector, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        Text(text = text, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+/** HUD readout: icon + text in one color. */
+@Composable
+private fun HudIconText(icon: GameIcon, text: String, color: Color, style: androidx.compose.ui.text.TextStyle, iconSize: Int, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
+        Icon(imageVector = icon.vector, contentDescription = null, tint = color, modifier = Modifier.size(iconSize.dp))
+        Text(text = text, style = style, color = color)
     }
 }
 
@@ -663,7 +716,7 @@ private fun PauseOverlay(
                     .fillMaxWidth()
                     .padding(top = 14.dp),
             ) {
-                Text(text = "계속하기", fontWeight = FontWeight.Bold)
+                ButtonLabel(GameIcon.PLAY, "계속하기")
             }
             Row(
                 modifier = Modifier
@@ -676,14 +729,14 @@ private fun PauseOverlay(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(text = "다시 시작", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    ButtonLabel(GameIcon.RETRY, "다시 시작", MaterialTheme.colorScheme.onBackground)
                 }
                 Button(
                     onClick = onExit,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(text = "HOME", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    ButtonLabel(GameIcon.HOME, "HOME", MaterialTheme.colorScheme.onBackground)
                 }
             }
             Button(
@@ -693,10 +746,10 @@ private fun PauseOverlay(
                     .fillMaxWidth()
                     .padding(top = 8.dp),
             ) {
-                Text(
-                    text = if (vibrationEnabled) "진동: 켜짐" else "진동: 꺼짐",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
+                ButtonLabel(
+                    GameIcon.VIBRATE,
+                    if (vibrationEnabled) "진동: 켜짐" else "진동: 꺼짐",
+                    MaterialTheme.colorScheme.onBackground,
                 )
             }
         }
@@ -830,14 +883,16 @@ private fun GameOverOverlay(
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
                     ) {
-                        Text(text = "📺 광고 보고 계속하기", fontWeight = FontWeight.Bold)
+                        ButtonLabel(GameIcon.PLAY_CIRCLE, "광고 보고 계속하기")
                     }
                 }
                 if (qualifies == true && !submitted) {
-                    Text(
-                        text = "🏆 TOP 10 진입!",
-                        style = MaterialTheme.typography.bodyLarge,
+                    HudIconText(
+                        icon = GameIcon.TROPHY,
+                        text = "TOP 10 진입!",
                         color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyLarge,
+                        iconSize = 20,
                         modifier = Modifier.padding(bottom = 6.dp),
                     )
                     OutlinedTextField(
@@ -875,7 +930,7 @@ private fun GameOverOverlay(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(text = "순위표", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        ButtonLabel(GameIcon.RANKING, "순위표", MaterialTheme.colorScheme.onBackground)
                     }
                     Button(
                         onClick = onShare,
@@ -883,7 +938,7 @@ private fun GameOverOverlay(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(text = "공유하기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        ButtonLabel(GameIcon.SHARE, "공유하기", MaterialTheme.colorScheme.onBackground)
                     }
                 }
                 Row(
@@ -893,14 +948,14 @@ private fun GameOverOverlay(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(onClick = onRetry, modifier = Modifier.weight(1f)) {
-                        Text(text = "RETRY", fontWeight = FontWeight.Bold)
+                        ButtonLabel(GameIcon.RETRY, "RETRY")
                     }
                     Button(
                         onClick = onExit,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(text = "HOME", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        ButtonLabel(GameIcon.HOME, "HOME", MaterialTheme.colorScheme.onBackground)
                     }
                 }
             }

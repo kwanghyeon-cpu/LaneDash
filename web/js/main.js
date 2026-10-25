@@ -65,11 +65,7 @@ function preloadImage(path) {
       continue;
     }
     if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-      variant.hitHalfWidthUnits = computeObstacleHitHalfWidthUnits(
-        variant.hitWidthScale,
-        variant.heightScale,
-        img.naturalWidth / img.naturalHeight,
-      );
+      variant.hitHalfWidthUnits = computeObstacleHitHalfWidthUnits(variant, img.naturalWidth / img.naturalHeight);
     }
   }
 })();
@@ -310,7 +306,7 @@ function loop(now) {
 function setPowerupChip(id, timeLeft, label) {
   const el = document.getElementById(id);
   el.classList.toggle('hidden', timeLeft <= 0);
-  if (timeLeft > 0) el.textContent = `${label} ${Math.ceil(timeLeft)}초`;
+  if (timeLeft > 0) el.querySelector('.hud-powerup-text').textContent = `${label} ${Math.ceil(timeLeft)}초`;
 }
 
 function showToast(text) {
@@ -323,9 +319,9 @@ function showToast(text) {
 
 function updateHud() {
   const speedKmh = Math.round(engine.effectiveSpeed * 20);
-  document.getElementById('hud-speed').textContent = `${speedKmh} KM/H`;
-  setPowerupChip('hud-shield', engine.shieldTimeLeft, '🛡 방어막');
-  setPowerupChip('hud-magnet', engine.magnetTimeLeft, '🧲 자석');
+  document.getElementById('hud-speed-text').textContent = `${speedKmh} KM/H`;
+  setPowerupChip('hud-shield', engine.shieldTimeLeft, '방어막');
+  setPowerupChip('hud-magnet', engine.magnetTimeLeft, '자석');
   if (engine.nearMissCount > lastNearMissCount) showToast('NEAR MISS!  +30');
   lastNearMissCount = engine.nearMissCount;
   document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
@@ -391,13 +387,14 @@ document.getElementById('btn-share').addEventListener('click', async () => {
   const text = `🚗💨 Lane Dash — ${city.name}에서 ${lastRunScore}점! (내 최고 ${best}점)\n` +
     `웹에서 바로 플레이 → ${WEB_PLAY_URL}\nGoogle Play → ${STORE_URL}`;
   const btn = document.getElementById('btn-share');
+  const label = btn.querySelector('.btn-label');
   try {
     if (navigator.share) {
       await navigator.share({ text });
     } else {
       await navigator.clipboard.writeText(text);
-      btn.textContent = '복사됨!';
-      setTimeout(() => { btn.textContent = '공유하기'; }, 1500);
+      label.textContent = '복사됨!';
+      setTimeout(() => { label.textContent = '공유하기'; }, 1500);
     }
   } catch (e) {
     if (e && e.name !== 'AbortError') console.error('share failed', e);
@@ -535,6 +532,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------- Boot ----------
+hydrateIcons();
 refreshHomeBest();
 buildCityGrid();
 buildCarGrid();

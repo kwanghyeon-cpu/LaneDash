@@ -346,3 +346,20 @@ html, body {
   .card-grid { grid-template-columns: repeat(2, 1fr); height: calc(100vh - 170px); }
   .title { font-size: 40px; }
 }
+
+/* ---------- Icons (Phosphor glyphs inlined by icons.js) ---------- */
+[data-icon] { display: inline-flex; vertical-align: middle; }
+.ico { width: 1.15em; height: 1.15em; fill: currentColor; }
+.btn [data-icon], .hud-speed [data-icon], .hud-fuel-label [data-icon], .hud-powerup [data-icon],
+.qualify-badge [data-icon], .settings-row [data-icon] { margin-right: 6px; }
+.hud-speed { display: flex; align-items: center; }
+.hud-powerup { display: flex; align-items: center; }
+.hud-fuel-label { display: flex; align-items: center; justify-content: center; }
+.qualify-badge { display: flex; align-items: center; }
+.lane-btn [data-icon], .settings-btn [data-icon] { margin: 0; }
+.lane-btn .ico { width: 26px; height: 26px; }
+.settings-btn .ico { width: 20px; height: 20px; }
+.hud-speed .ico { width: 24px; height: 24px; }
+.settings-row > span:first-child { display: flex; align-items: center; }
+.btn { display: inline-flex; align-items: center; justify-content: center; }
+.overlay-btn { justify-content: center; }

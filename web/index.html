@@ -6,7 +6,7 @@
 <title>Lane Dash</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css" />
-<link rel="stylesheet" href="style.css?v=7" />
+<link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
 
@@ -48,12 +48,12 @@
 
       <div class="hud">
         <div class="hud-left">
-          <div id="hud-speed" class="hud-speed">0 KM/H</div>
-          <div id="hud-shield" class="hud-powerup hud-shield hidden"></div>
-          <div id="hud-magnet" class="hud-powerup hud-magnet hidden"></div>
+          <div class="hud-speed"><span data-icon="gauge"></span><span id="hud-speed-text">0 KM/H</span></div>
+          <div id="hud-shield" class="hud-powerup hud-shield hidden"><span data-icon="shield"></span><span class="hud-powerup-text"></span></div>
+          <div id="hud-magnet" class="hud-powerup hud-magnet hidden"><span data-icon="magnet"></span><span class="hud-powerup-text"></span></div>
         </div>
         <div class="hud-fuel">
-          <div class="hud-fuel-label">FUEL</div>
+          <div class="hud-fuel-label"><span data-icon="gasPump"></span>FUEL</div>
           <div class="fuel-track"><div id="fuel-bar" class="fuel-bar"></div></div>
         </div>
         <div class="hud-score">
@@ -65,19 +65,19 @@
       <div id="hud-toast" class="hud-toast"></div>
 
       <div class="lane-controls">
-        <button id="btn-lane-up" class="lane-btn" aria-label="위 차선">▲</button>
-        <button id="btn-lane-down" class="lane-btn" aria-label="아래 차선">▼</button>
+        <button id="btn-lane-up" class="lane-btn" aria-label="위 차선"><span data-icon="caretUp"></span></button>
+        <button id="btn-lane-down" class="lane-btn" aria-label="아래 차선"><span data-icon="caretDown"></span></button>
       </div>
-      <button id="btn-pause" class="lane-btn pause-btn" aria-label="일시정지">⏸</button>
+      <button id="btn-pause" class="lane-btn pause-btn" aria-label="일시정지"><span data-icon="pause"></span></button>
       <p class="controls-hint">↑ / ↓ 키로 이동, P 키로 일시정지</p>
 
       <div id="pause-overlay" class="overlay hidden">
         <div class="pause-card">
           <h2 class="pause-title">일시정지</h2>
-          <button id="btn-resume" class="btn btn-primary overlay-btn">계속하기</button>
+          <button id="btn-resume" class="btn btn-primary overlay-btn"><span data-icon="play"></span>계속하기</button>
           <div class="overlay-btn-row">
-            <button id="btn-pause-restart" class="btn btn-secondary">다시 시작</button>
-            <button id="btn-pause-home" class="btn btn-secondary">HOME</button>
+            <button id="btn-pause-restart" class="btn btn-secondary"><span data-icon="retry"></span>다시 시작</button>
+            <button id="btn-pause-home" class="btn btn-secondary"><span data-icon="home"></span>HOME</button>
           </div>
         </div>
       </div>
@@ -95,17 +95,17 @@
           </div>
           <div class="overlay-col overlay-col-actions">
             <div id="gameover-qualify" class="qualify-block hidden">
-              <p class="qualify-badge">🏆 TOP 10 진입!</p>
+              <p class="qualify-badge"><span data-icon="trophy"></span>TOP 10 진입!</p>
               <input id="score-name-input" class="name-input" type="text" maxlength="12" placeholder="이름 입력" />
               <button id="btn-submit-score" class="btn btn-primary overlay-btn">등록하기</button>
             </div>
             <div class="overlay-btn-row">
-              <button id="btn-view-leaderboard" class="btn btn-secondary">순위표</button>
-              <button id="btn-share" class="btn btn-secondary">공유하기</button>
+              <button id="btn-view-leaderboard" class="btn btn-secondary"><span data-icon="ranking"></span>순위표</button>
+              <button id="btn-share" class="btn btn-secondary"><span data-icon="share"></span><span class="btn-label">공유하기</span></button>
             </div>
             <div class="overlay-btn-row">
-              <button id="btn-retry" class="btn btn-primary">RETRY</button>
-              <button id="btn-gameover-home" class="btn btn-secondary">HOME</button>
+              <button id="btn-retry" class="btn btn-primary"><span data-icon="retry"></span>RETRY</button>
+              <button id="btn-gameover-home" class="btn btn-secondary"><span data-icon="home"></span>HOME</button>
             </div>
           </div>
         </div>
@@ -123,7 +123,7 @@
     </section>
 
     <!-- SOUND SETTINGS (accessible from any screen) -->
-    <button id="btn-settings" class="settings-btn" aria-label="사운드 설정">⚙</button>
+    <button id="btn-settings" class="settings-btn" aria-label="사운드 설정"><span data-icon="gear"></span></button>
     <div id="settings-panel" class="settings-panel hidden">
       <div class="settings-card">
         <h3>사운드 설정</h3>
@@ -138,7 +138,7 @@
           <span id="sfx-volume-value" class="settings-value">100</span>
         </label>
         <label class="settings-row">
-          <span>진동</span>
+          <span><span data-icon="vibrate"></span>진동</span>
           <input id="vibration-toggle" type="checkbox" />
           <span class="settings-hint">모바일 브라우저에서만 동작</span>
         </label>
@@ -148,7 +148,8 @@
 
   </div>
 
-  <script src="js/catalog.js?v=10"></script>
+  <script src="js/catalog.js?v=11"></script>
+  <script src="js/icons.js?v=1"></script>
   <!-- Same Firebase project as the Android app (lanedash-2cc5d), so scores set here land
        in the same shared "scores" collection / leaderboard. -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -156,7 +157,7 @@
   <script src="js/leaderboard.js?v=1"></script>
   <script src="js/audio.js?v=7"></script>
   <script src="js/engine.js?v=11"></script>
-  <script src="js/render.js?v=13"></script>
-  <script src="js/main.js?v=10"></script>
+  <script src="js/render.js?v=14"></script>
+  <script src="js/main.js?v=11"></script>
 </body>
 </html>

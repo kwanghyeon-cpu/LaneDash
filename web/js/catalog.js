@@ -47,11 +47,16 @@ const CITIES = [
   },
 ];
 
+// Drawn width, in "base car widths", per meter of real vehicle length. Anchored so the player's
+// SUV (4.4 m) keeps the 1.47 base widths it already had; every other vehicle scales from its real
+// length, so a bus really is ~2.4x a car. Mirrors VEHICLE_WIDTH_PER_METER in Model.kt.
+const VEHICLE_WIDTH_PER_METER = 1.47 / 4.4;
+
 const CARS = [
-  { id: 'suv', name: 'SUV', nameEn: 'SUV', sprite: 'assets/cars/car_gen1.png' },
-  { id: 'sports_car', name: '스포츠카', nameEn: 'SPORTS CAR', sprite: 'assets/cars/car_gen2.png' },
-  { id: 'sedan', name: '세단', nameEn: 'SEDAN', sprite: 'assets/cars/car_gen3.png' },
-  { id: 'van', name: '승합차', nameEn: 'VAN', sprite: 'assets/cars/car_gen4.png' },
+  { id: 'suv', name: 'SUV', nameEn: 'SUV', sprite: 'assets/cars/car_gen1.png', lengthMeters: 4.4 },
+  { id: 'sports_car', name: '스포츠카', nameEn: 'SPORTS CAR', sprite: 'assets/cars/car_gen2.png', lengthMeters: 4.2 },
+  { id: 'sedan', name: '세단', nameEn: 'SEDAN', sprite: 'assets/cars/car_gen3.png', lengthMeters: 4.4 },
+  { id: 'van', name: '승합차', nameEn: 'VAN', sprite: 'assets/cars/car_gen4.png', lengthMeters: 4.8 },
 ];
 
 // hitWidthScale / heightScale mirror ObstacleVariant in Model.kt (post size-tuning) and
@@ -65,11 +70,14 @@ const CARS = [
 const OBSTACLE_VARIANTS = {
   CONE: { kind: 'CONE', hitWidthScale: 0.3, heightScale: 0.45, sprite: 'assets/obstacles/obstacle_cone.png', hitHalfWidthUnits: 0.46 },
   BARRIER: { kind: 'BARRIER', hitWidthScale: 1.0, heightScale: 0.55, sprite: 'assets/obstacles/obstacle_barrier.png', hitHalfWidthUnits: 0.70 },
-  // Vehicle obstacles (sedan/suv/bus/truck) scaled 0.7x twice (0.49x of the original) ahead of release.
-  SEDAN: { kind: 'SEDAN', hitWidthScale: 0.441, heightScale: 0.417, sprite: 'assets/obstacles/obstacle_sedan.png', hitHalfWidthUnits: 0.877 },
-  SUV: { kind: 'SUV', hitWidthScale: 0.515, heightScale: 0.49, sprite: 'assets/obstacles/obstacle_suv.png', hitHalfWidthUnits: 1.019 },
-  BUS: { kind: 'BUS', hitWidthScale: 0.671, heightScale: 0.459, sprite: 'assets/obstacles/obstacle_bus.png', hitHalfWidthUnits: 1.328 },
-  TRUCK: { kind: 'TRUCK', hitWidthScale: 0.583, heightScale: 0.377, sprite: 'assets/obstacles/obstacle_truck.png', hitHalfWidthUnits: 1.156 },
+  // Vehicles (lengthMeters set) ignore hitWidthScale/heightScale: their drawn width comes from real
+  // length on the same scale as the player's car (VEHICLE_WIDTH_PER_METER) and height follows the
+  // sprite's aspect. hitHalfWidthUnits fallback = 0.5 * lengthMeters * VEHICLE_WIDTH_PER_METER *
+  // 1.1275 (world units per base car width at 16:9) * 0.92 (graze forgiveness).
+  SEDAN: { kind: 'SEDAN', lengthMeters: 4.7, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_sedan.png', hitHalfWidthUnits: 0.814 },
+  SUV: { kind: 'SUV', lengthMeters: 4.8, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_suv.png', hitHalfWidthUnits: 0.832 },
+  BUS: { kind: 'BUS', lengthMeters: 11, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_bus.png', hitHalfWidthUnits: 1.906 },
+  TRUCK: { kind: 'TRUCK', lengthMeters: 8.5, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_truck.png', hitHalfWidthUnits: 1.473 },
 };
 
 // Small/common obstacles spawn more often than big rare ones like buses.

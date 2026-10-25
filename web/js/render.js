@@ -20,15 +20,21 @@ function mod(a, b) { return ((a % b) + b) % b; }
  * before actually touching it. Deriving the hitbox from the same fit math keeps it
  * locked to whatever's actually drawn, for every sprite, with no per-variant retuning.
  */
-function computeObstacleHitHalfWidthUnits(hitWidthScale, heightScale, spriteAspect) {
+function computeObstacleHitHalfWidthUnits(variant, spriteAspect) {
   const roadFraction = 1 - SKY_FRACTION;
   const laneHeightOverCanvasHeight = roadFraction / LANE_COUNT;
   const carHeightOverCanvasHeight = laneHeightOverCanvasHeight * 0.58;
   const carWidthOverCanvasHeight = carHeightOverCanvasHeight * 1.6;
 
-  const widthBoxOverCanvasHeight = carWidthOverCanvasHeight * 0.85 * OBSTACLE_SCALE * hitWidthScale;
-  const heightBoxOverCanvasHeight = carHeightOverCanvasHeight * 0.95 * OBSTACLE_SCALE * heightScale;
-  const renderedWidthOverCanvasHeight = Math.min(widthBoxOverCanvasHeight, heightBoxOverCanvasHeight * spriteAspect);
+  let renderedWidthOverCanvasHeight;
+  if (variant.lengthMeters) {
+    // Vehicles: width comes straight from real length (drawFrame draws them width-first).
+    renderedWidthOverCanvasHeight = carWidthOverCanvasHeight * VEHICLE_WIDTH_PER_METER * variant.lengthMeters;
+  } else {
+    const widthBoxOverCanvasHeight = carWidthOverCanvasHeight * 0.85 * OBSTACLE_SCALE * variant.hitWidthScale;
+    const heightBoxOverCanvasHeight = carHeightOverCanvasHeight * 0.95 * OBSTACLE_SCALE * variant.heightScale;
+    renderedWidthOverCanvasHeight = Math.min(widthBoxOverCanvasHeight, heightBoxOverCanvasHeight * spriteAspect);
+  }
 
   // canvasHeight/canvasWidth is fixed (GAME_ASPECT), and pxPerUnit = canvasWidth / WORLD_WIDTH_UNITS,
   // so world-unit width = renderedWidthPx / pxPerUnit = renderedWidthOverCanvasHeight * (canvasHeight/canvasWidth) * WORLD_WIDTH_UNITS.
@@ -121,125 +127,28 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** Fuel refill pickup, drawn as a small retro jerry can (matches what the item does). */
-function drawFuelCanItem(ctx, cx, cy, radius) {
-  const w = radius * 1.7;
-  const h = radius * 2.0;
-  const left = cx - w / 2;
-  const top = cy - h / 2 + radius * 0.12;
-  const r = radius * 0.22;
-  const bodyPath = () => roundRectPath(ctx, left, top, w, h, r);
+// Pickups are Phosphor glyphs (icons.js) on a dark badge with a colored ring — flat, legible at
+// small sizes, and told apart at a glance by ring color. Mirrors drawItemBadge in GameArt.kt.
+const FUEL_ITEM_COLOR = '#FFA23C';
+const SHIELD_ITEM_COLOR = '#4DA3FF';
+const MAGNET_ITEM_COLOR = '#E63946';
 
-  ctx.strokeStyle = '#2A1B0E';
-  ctx.lineWidth = Math.max(1.5, radius * 0.18);
-  ctx.lineCap = 'round';
+function drawItemBadge(ctx, glyph, cx, cy, radius, color) {
+  ctx.fillStyle = 'rgba(27,16,53,0.9)';
   ctx.beginPath();
-  ctx.arc(cx, top, radius * 0.4, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = radius * 0.14;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.93, 0, Math.PI * 2);
   ctx.stroke();
-
-  ctx.fillStyle = '#FFC93C';
-  const capW = w * 0.24, capH = radius * 0.3;
-  ctx.fillRect(cx - capW / 2, top - capH * 0.55, capW, capH);
-
-  ctx.fillStyle = '#E63946';
-  bodyPath();
-  ctx.fill();
-
-  ctx.save();
-  bodyPath();
-  ctx.clip();
-
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
-  ctx.fillRect(left, top + h * 0.66, w, h * 0.34);
-
-  ctx.fillStyle = 'rgba(0,0,0,0.28)';
-  const gripW = w * 0.52, gripH = h * 0.15;
-  ctx.fillRect(cx - gripW / 2, top + h * 0.3, gripW, gripH);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.fillRect(left + w * 0.12, top + h * 0.1, w * 0.14, h * 0.28);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  const dropX = cx, dropY = top + h * 0.56, dropR = radius * 0.15;
-  ctx.beginPath();
-  ctx.moveTo(dropX, dropY - dropR * 1.4);
-  ctx.quadraticCurveTo(dropX + dropR * 1.15, dropY + dropR * 0.4, dropX, dropY + dropR * 1.15);
-  ctx.quadraticCurveTo(dropX - dropR * 1.15, dropY + dropR * 0.4, dropX, dropY - dropR * 1.4);
-  ctx.fill();
-
-  ctx.restore();
+  drawIconGlyph(ctx, glyph, cx, cy, radius * 1.15, color);
 }
 
-/** Timed-invincibility pickup, drawn as a blue shield. Mirrors drawShieldItem in GameArt.kt. */
-function drawShieldItem(ctx, cx, cy, radius) {
-  const w = radius * 1.7, h = radius * 2.0;
-  const left = cx - w / 2, right = cx + w / 2, top = cy - h / 2;
-  const shield = () => {
-    ctx.beginPath();
-    ctx.moveTo(left, top + h * 0.1);
-    ctx.lineTo(right, top + h * 0.1);
-    ctx.lineTo(right, top + h * 0.55);
-    ctx.quadraticCurveTo(right, top + h * 0.88, cx, top + h);
-    ctx.quadraticCurveTo(left, top + h * 0.88, left, top + h * 0.55);
-    ctx.closePath();
-  };
-  ctx.fillStyle = '#3D8BFF';
-  shield();
-  ctx.fill();
-  ctx.save();
-  shield();
-  ctx.clip();
-  ctx.fillStyle = 'rgba(255,255,255,0.28)';
-  ctx.fillRect(left, top, w * 0.5, h);
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.fillRect(cx, top, w * 0.5, h);
-  ctx.restore();
-  ctx.strokeStyle = '#1A2340';
-  ctx.lineWidth = Math.max(1.5, radius * 0.14);
-  shield();
-  ctx.stroke();
-
-  const star = [
-    [0, -0.45], [0.14, -0.1], [0.5, -0.1], [0.2, 0.12], [0.32, 0.5],
-    [0, 0.27], [-0.32, 0.5], [-0.2, 0.12], [-0.5, -0.1], [-0.14, -0.1],
-  ];
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.beginPath();
-  star.forEach(([dx, dy], i) => {
-    const px = cx + dx * radius, py = cy + dy * radius;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  });
-  ctx.closePath();
-  ctx.fill();
-}
-
-/** Timed fuel-magnet pickup, drawn as a red horseshoe magnet. Mirrors drawMagnetItem in GameArt.kt. */
-function drawMagnetItem(ctx, cx, cy, radius) {
-  const arcR = radius * 0.62;
-  const stroke = Math.max(3, radius * 0.5);
-  const shift = radius * 0.2;
-  const legTop = cy - arcR * 0.95 + shift;
-  const legBottom = cy + shift;
-  ctx.lineWidth = stroke;
-  ctx.lineCap = 'butt';
-  ctx.strokeStyle = '#E63946';
-  ctx.beginPath();
-  ctx.arc(cx, cy + shift, arcR, 0, Math.PI);
-  ctx.stroke();
-  for (const sign of [-1, 1]) {
-    const x = cx + sign * arcR;
-    ctx.strokeStyle = '#E63946';
-    ctx.beginPath();
-    ctx.moveTo(x, legTop);
-    ctx.lineTo(x, legBottom);
-    ctx.stroke();
-    ctx.strokeStyle = '#E8ECF4';
-    ctx.beginPath();
-    ctx.moveTo(x, legTop);
-    ctx.lineTo(x, legTop + stroke * 0.95);
-    ctx.stroke();
-  }
-}
+function drawFuelCanItem(ctx, cx, cy, radius) { drawItemBadge(ctx, 'fuelCan', cx, cy, radius, FUEL_ITEM_COLOR); }
+function drawShieldItem(ctx, cx, cy, radius) { drawItemBadge(ctx, 'shield', cx, cy, radius, SHIELD_ITEM_COLOR); }
+function drawMagnetItem(ctx, cx, cy, radius) { drawItemBadge(ctx, 'magnet', cx, cy, radius, MAGNET_ITEM_COLOR); }
 
 /** Translucent bubble drawn around the player while the shield is active. */
 function drawShieldBubble(ctx, cx, cy, rx, ry, alpha) {
@@ -431,9 +340,14 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
   };
 
   // Scaled 0.7x twice (0.49x) ahead of release — mirrors GameScreen.kt.
-  const playerCarHeight = laneCarHeight(animatedLane) * 3 * 0.49;
-  const playerCarWidth = laneCarWidth(animatedLane) * 3 * 0.49;
+  // Vehicle widths come from real-world lengths (car.lengthMeters / variant.lengthMeters) on one
+  // shared scale, so the player's car and the traffic are in true proportion; each sprite's own
+  // aspect ratio then sets its height. The box height only needs to be generous enough not to
+  // clamp any sprite (every vehicle is wider than 1.7:1) — mirrors GameScreen.kt.
+  const playerCarWidth = laneCarWidth(animatedLane) * car.lengthMeters * VEHICLE_WIDTH_PER_METER;
+  const playerCarHeight = playerCarWidth / 1.7;
   const playerCarY = laneBottomY(animatedLane) - playerCarHeight / 2;
+  const playerFit = fittedSize(images[car.sprite], playerCarWidth, playerCarHeight);
 
   // Oversized sprites (OBSTACLE_SCALE) spill into neighboring lanes, so draw order has to
   // follow lane depth or a far-lane sprite can wrongly paint over a near-lane one. Lane 0
@@ -456,13 +370,13 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
       drawFittedSprite(ctx, carImg, 0, -playerCarHeight / 2, playerCarWidth, playerCarHeight);
       ctx.restore();
       if (engine.magnetTimeLeft > 0) {
-        drawMagnetAura(ctx, carX, playerCarY, playerCarWidth * 0.7, playerCarHeight * 0.85, engine.elapsedSeconds * 60);
+        drawMagnetAura(ctx, carX, carBottom - playerFit.h / 2, playerFit.w * 0.62, playerFit.h * 0.95, engine.elapsedSeconds * 60);
       }
       if (engine.shieldTimeLeft > 0) {
         // Blinks during the last 1.5s so the player sees it about to run out.
         const ending = engine.shieldTimeLeft < 1.5;
         const alpha = ending && Math.floor(engine.shieldTimeLeft * 8) % 2 === 0 ? 0.3 : 1;
-        drawShieldBubble(ctx, carX, playerCarY, playerCarWidth * 0.62, playerCarHeight * 0.78, alpha);
+        drawShieldBubble(ctx, carX, carBottom - playerFit.h / 2, playerFit.w * 0.58, playerFit.h * 0.85, alpha);
       }
     },
   }];
@@ -475,8 +389,13 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
     const entityCarHeight = laneCarHeight(entity.lane);
     const entityCarWidth = laneCarWidth(entity.lane);
     if (entity.kind === 'OBSTACLE') {
-      const w = entityCarWidth * 0.85 * OBSTACLE_SCALE * entity.variant.hitWidthScale;
-      const h = entityCarHeight * 0.95 * OBSTACLE_SCALE * entity.variant.heightScale;
+      const vehicle = entity.variant.lengthMeters > 0;
+      const w = vehicle
+        ? entityCarWidth * entity.variant.lengthMeters * VEHICLE_WIDTH_PER_METER
+        : entityCarWidth * 0.85 * OBSTACLE_SCALE * entity.variant.hitWidthScale;
+      const h = vehicle
+        ? w / 1.7
+        : entityCarHeight * 0.95 * OBSTACLE_SCALE * entity.variant.heightScale;
       const ey = laneBottomY(entity.lane) - h / 2;
       drawables.push({
         lane: entity.lane,

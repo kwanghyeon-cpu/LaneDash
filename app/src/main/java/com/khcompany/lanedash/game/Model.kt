@@ -68,6 +68,14 @@ data class RunTraits(
 }
 
 /**
+ * Drawn width, in "base car widths", per meter of real vehicle length. Anchored so the player's
+ * SUV (4.4 m) keeps the 1.47 base widths it already had; every other vehicle scales from its real
+ * length (a 4.2 m sports car comes out narrower, a 11 m bus 2.5x wider). Mirrors
+ * VEHICLE_WIDTH_PER_METER in the web catalog.js.
+ */
+const val VEHICLE_WIDTH_PER_METER = 1.47f / 4.4f
+
+/**
  * Obstacle sub-appearance; items are always a fuel-can pickup.
  * [hitWidthScale] and [heightScale] control how big the sprite is DRAWN (see GameScreen's
  * obstacleWidth/obstacleHeight) — they don't directly control collision. GameScreen fits
@@ -80,22 +88,29 @@ data class RunTraits(
  * [spriteName] is an optional drawable name (no extension), e.g. "obstacle_bus" — drop a
  * matching file into res/drawable and it's used automatically; otherwise the game falls
  * back to the procedural vector art for that variant.
+ *
+ * Vehicles (lengthMeters > 0) ignore the two scales above: their drawn width comes from their
+ * real-world length, on the same meters-to-width scale as the player's car
+ * ([VEHICLE_WIDTH_PER_METER]), so a bus really is ~2.4x a car and a cement mixer ~1.9x. Their
+ * height then follows from the sprite's own aspect ratio. Cones and barriers stay gameplay-sized
+ * (true-to-scale they'd be a few pixels wide).
  */
 enum class ObstacleVariant(
     val hitWidthScale: Float,
     val heightScale: Float,
     val spriteName: String,
     val hitHalfWidthUnits: Float,
+    val lengthMeters: Float = 0f,
 ) {
-    // Bus bumped another 1.2x and truck (cement mixer) 2x from their prior scale, then
-    // truck brought back down to 0.7x of that; barrier and sedan left as-is. Vehicle
-    // obstacles (sedan/suv/bus/truck) later scaled 0.7x twice (0.49x of the original) ahead of release.
     CONE(0.3f, 0.45f, "obstacle_cone", 0.46f),
     BARRIER(1.0f, 0.55f, "obstacle_barrier", 0.70f),
-    SEDAN(0.441f, 0.417f, "obstacle_sedan", 0.877f),
-    SUV(0.515f, 0.49f, "obstacle_suv", 1.019f),
-    BUS(0.671f, 0.459f, "obstacle_bus", 1.328f),
-    TRUCK(0.583f, 0.377f, "obstacle_truck", 1.156f),
+
+    // hitHalfWidthUnits for vehicles = 0.5 * lengthMeters * VEHICLE_WIDTH_PER_METER * 1.1275
+    // (world units per base car width at the 16:9 reference) * 0.92 (graze forgiveness).
+    SEDAN(0f, 0f, "obstacle_sedan", 0.814f, lengthMeters = 4.7f),
+    SUV(0f, 0f, "obstacle_suv", 0.832f, lengthMeters = 4.8f),
+    BUS(0f, 0f, "obstacle_bus", 1.906f, lengthMeters = 11.0f),
+    TRUCK(0f, 0f, "obstacle_truck", 1.473f, lengthMeters = 8.5f),
 }
 
 data class RoadEntity(
@@ -157,6 +172,8 @@ data class CarOption(
      * game falls back to the procedural vector silhouette for [bodyStyle].
      */
     val spriteName: String = "",
+    /** Real-world vehicle length, which sets how wide it's drawn relative to the others. */
+    val lengthMeters: Float = 4.4f,
 )
 
 object GameCatalog {
@@ -247,6 +264,7 @@ object GameCatalog {
             bodyShade = Color(0xFFCC7A1E),
             roofColor = Color(0xFF2B2B2B),
             spriteName = "car_gen2",
+            lengthMeters = 4.2f,
         ),
         CarOption(
             id = "sedan",
@@ -267,6 +285,7 @@ object GameCatalog {
             bodyShade = Color(0xFF357A38),
             roofColor = Color(0xFF22331F),
             spriteName = "car_gen4",
+            lengthMeters = 4.8f,
         ),
     )
 

@@ -778,137 +778,26 @@ fun DrawScope.drawObstacle(variant: ObstacleVariant, center: Offset, width: Floa
     }
 }
 
-/** Fuel refill pickup, drawn as a small retro jerry can (matches what the item does). Mirrors drawFuelCanItem in the web build's render.js. */
-fun DrawScope.drawFuelCanItem(center: Offset, radius: Float) {
-    val w = radius * 1.7f
-    val h = radius * 2.0f
-    val left = center.x - w / 2f
-    val top = center.y - h / 2f + radius * 0.12f
-    val r = radius * 0.22f
+// Pickups are Phosphor glyphs (GameIcons.kt) on a dark badge with a colored ring — flat, legible
+// at small sizes, and told apart at a glance by ring color. Mirrors drawItemBadge in render.js.
+val FUEL_ITEM_COLOR = Color(0xFFFFA23C)
+val SHIELD_ITEM_COLOR = Color(0xFF4DA3FF)
+val MAGNET_ITEM_COLOR = Color(0xFFE63946)
 
-    val bodyPath = Path().apply {
-        addRoundRect(RoundRect(left = left, top = top, right = left + w, bottom = top + h, cornerRadius = CornerRadius(r, r)))
-    }
-
-    drawArc(
-        color = Color(0xFF2A1B0E),
-        startAngle = 198f,
-        sweepAngle = 144f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius * 0.4f, top - radius * 0.4f),
-        size = Size(radius * 0.8f, radius * 0.8f),
-        style = Stroke(width = (radius * 0.18f).coerceAtLeast(1.5f), cap = StrokeCap.Round),
-    )
-
-    val capW = w * 0.24f
-    val capH = radius * 0.3f
-    drawRect(
-        color = Color(0xFFFFC93C),
-        topLeft = Offset(center.x - capW / 2f, top - capH * 0.55f),
-        size = Size(capW, capH),
-    )
-
-    drawPath(bodyPath, color = Color(0xFFE63946))
-
-    clipPath(bodyPath) {
-        drawRect(
-            color = Color.Black.copy(alpha = 0.2f),
-            topLeft = Offset(left, top + h * 0.66f),
-            size = Size(w, h * 0.34f),
-        )
-        val gripW = w * 0.52f
-        val gripH = h * 0.15f
-        drawRect(
-            color = Color.Black.copy(alpha = 0.28f),
-            topLeft = Offset(center.x - gripW / 2f, top + h * 0.3f),
-            size = Size(gripW, gripH),
-        )
-        drawRect(
-            color = Color.White.copy(alpha = 0.3f),
-            topLeft = Offset(left + w * 0.12f, top + h * 0.1f),
-            size = Size(w * 0.14f, h * 0.28f),
-        )
-        val dropX = center.x
-        val dropY = top + h * 0.56f
-        val dropR = radius * 0.15f
-        val dropPath = Path().apply {
-            moveTo(dropX, dropY - dropR * 1.4f)
-            quadraticTo(dropX + dropR * 1.15f, dropY + dropR * 0.4f, dropX, dropY + dropR * 1.15f)
-            quadraticTo(dropX - dropR * 1.15f, dropY + dropR * 0.4f, dropX, dropY - dropR * 1.4f)
-            close()
-        }
-        drawPath(dropPath, color = Color.White.copy(alpha = 0.85f))
-    }
+private fun DrawScope.drawItemBadge(icon: GameIcon, center: Offset, radius: Float, color: Color) {
+    drawCircle(color = Color(0xFF1B1035).copy(alpha = 0.9f), radius = radius, center = center)
+    drawCircle(color = color, radius = radius * 0.93f, center = center, style = Stroke(width = radius * 0.14f))
+    drawGameIcon(icon, center, radius * 1.15f, color)
 }
 
-/** Timed-invincibility pickup, drawn as a blue shield. Mirrors drawShieldItem in render.js. */
-fun DrawScope.drawShieldItem(center: Offset, radius: Float) {
-    val w = radius * 1.7f
-    val h = radius * 2.0f
-    val left = center.x - w / 2f
-    val right = center.x + w / 2f
-    val top = center.y - h / 2f
-    val shield = Path().apply {
-        moveTo(left, top + h * 0.1f)
-        lineTo(right, top + h * 0.1f)
-        lineTo(right, top + h * 0.55f)
-        quadraticTo(right, top + h * 0.88f, center.x, top + h)
-        quadraticTo(left, top + h * 0.88f, left, top + h * 0.55f)
-        close()
-    }
-    drawPath(shield, color = Color(0xFF3D8BFF))
-    clipPath(shield) {
-        drawRect(
-            color = Color.White.copy(alpha = 0.28f),
-            topLeft = Offset(left, top),
-            size = Size(w * 0.5f, h),
-        )
-        drawRect(
-            color = Color.Black.copy(alpha = 0.18f),
-            topLeft = Offset(center.x, top),
-            size = Size(w * 0.5f, h),
-        )
-    }
-    drawPath(shield, color = Color(0xFF1A2340), style = Stroke(width = (radius * 0.14f).coerceAtLeast(1.5f)))
-    val star = Path().apply {
-        moveTo(center.x, center.y - radius * 0.45f)
-        lineTo(center.x + radius * 0.14f, center.y - radius * 0.1f)
-        lineTo(center.x + radius * 0.5f, center.y - radius * 0.1f)
-        lineTo(center.x + radius * 0.2f, center.y + radius * 0.12f)
-        lineTo(center.x + radius * 0.32f, center.y + radius * 0.5f)
-        lineTo(center.x, center.y + radius * 0.27f)
-        lineTo(center.x - radius * 0.32f, center.y + radius * 0.5f)
-        lineTo(center.x - radius * 0.2f, center.y + radius * 0.12f)
-        lineTo(center.x - radius * 0.5f, center.y - radius * 0.1f)
-        lineTo(center.x - radius * 0.14f, center.y - radius * 0.1f)
-        close()
-    }
-    drawPath(star, color = Color.White.copy(alpha = 0.92f))
-}
+/** Fuel refill pickup. */
+fun DrawScope.drawFuelCanItem(center: Offset, radius: Float) = drawItemBadge(GameIcon.FUEL_CAN, center, radius, FUEL_ITEM_COLOR)
 
-/** Timed fuel-magnet pickup, drawn as a red horseshoe magnet. Mirrors drawMagnetItem in render.js. */
-fun DrawScope.drawMagnetItem(center: Offset, radius: Float) {
-    val arcR = radius * 0.62f
-    val stroke = (radius * 0.5f).coerceAtLeast(3f)
-    val shift = radius * 0.2f
-    val legTop = center.y - arcR * 0.95f + shift
-    val legBottom = center.y + shift
-    val red = Color(0xFFE63946)
-    drawArc(
-        color = red,
-        startAngle = 0f,
-        sweepAngle = 180f,
-        useCenter = false,
-        topLeft = Offset(center.x - arcR, center.y - arcR + shift),
-        size = Size(arcR * 2f, arcR * 2f),
-        style = Stroke(width = stroke),
-    )
-    for (sign in listOf(-1f, 1f)) {
-        val x = center.x + sign * arcR
-        drawLine(red, Offset(x, legTop), Offset(x, legBottom), strokeWidth = stroke)
-        drawLine(Color(0xFFE8ECF4), Offset(x, legTop), Offset(x, legTop + stroke * 0.95f), strokeWidth = stroke)
-    }
-}
+/** Timed-invincibility pickup. */
+fun DrawScope.drawShieldItem(center: Offset, radius: Float) = drawItemBadge(GameIcon.SHIELD, center, radius, SHIELD_ITEM_COLOR)
+
+/** Timed fuel-magnet pickup. */
+fun DrawScope.drawMagnetItem(center: Offset, radius: Float) = drawItemBadge(GameIcon.MAGNET, center, radius, MAGNET_ITEM_COLOR)
 
 /** Translucent bubble drawn around the player while the shield is active. */
 fun DrawScope.drawShieldBubble(center: Offset, radiusX: Float, radiusY: Float, alpha: Float) {
