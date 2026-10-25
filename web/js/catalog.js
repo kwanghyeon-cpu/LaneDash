@@ -47,10 +47,10 @@ const CITIES = [
   },
 ];
 
-// Drawn width, in "base car widths", per meter of real vehicle length. Anchored so the player's
-// SUV (4.4 m) keeps the 1.47 base widths it already had; every other vehicle scales from its real
-// length, so a bus really is ~2.4x a car. Mirrors VEHICLE_WIDTH_PER_METER in Model.kt.
-const VEHICLE_WIDTH_PER_METER = 1.47 / 4.4;
+// Drawn width, in "base car widths", per meter of real vehicle length. Anchored on the player's
+// SUV (4.4 m) at 1.47 base widths, then enlarged 10% (1.617); every other vehicle scales from its
+// real length on the same scale, so a bus really is ~2.4x a car. Mirrors VEHICLE_WIDTH_PER_METER in Model.kt.
+const VEHICLE_WIDTH_PER_METER = 1.47 * 1.1 / 4.4;
 
 const CARS = [
   { id: 'suv', name: 'SUV', nameEn: 'SUV', sprite: 'assets/cars/car_gen1.png', lengthMeters: 4.4 },
@@ -68,16 +68,16 @@ const CARS = [
 // (see computeObstacleHitHalfWidthUnits in render.js). The values below are just a
 // reasonable synchronous fallback in case a game starts before that async pass finishes.
 const OBSTACLE_VARIANTS = {
-  CONE: { kind: 'CONE', hitWidthScale: 0.3, heightScale: 0.45, sprite: 'assets/obstacles/obstacle_cone.png', hitHalfWidthUnits: 0.46 },
+  CONE: { kind: 'CONE', hitWidthScale: 0.21, heightScale: 0.315, sprite: 'assets/obstacles/obstacle_cone.png', hitHalfWidthUnits: 0.322 },
   BARRIER: { kind: 'BARRIER', hitWidthScale: 1.0, heightScale: 0.55, sprite: 'assets/obstacles/obstacle_barrier.png', hitHalfWidthUnits: 0.70 },
   // Vehicles (lengthMeters set) ignore hitWidthScale/heightScale: their drawn width comes from real
   // length on the same scale as the player's car (VEHICLE_WIDTH_PER_METER) and height follows the
   // sprite's aspect. hitHalfWidthUnits fallback = 0.5 * lengthMeters * VEHICLE_WIDTH_PER_METER *
   // 1.1275 (world units per base car width at 16:9) * 0.92 (graze forgiveness).
-  SEDAN: { kind: 'SEDAN', lengthMeters: 4.7, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_sedan.png', hitHalfWidthUnits: 0.814 },
-  SUV: { kind: 'SUV', lengthMeters: 4.8, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_suv.png', hitHalfWidthUnits: 0.832 },
-  BUS: { kind: 'BUS', lengthMeters: 11, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_bus.png', hitHalfWidthUnits: 1.906 },
-  TRUCK: { kind: 'TRUCK', lengthMeters: 8.5, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_truck.png', hitHalfWidthUnits: 1.473 },
+  SEDAN: { kind: 'SEDAN', lengthMeters: 4.7, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_sedan.png', hitHalfWidthUnits: 0.895 },
+  SUV: { kind: 'SUV', lengthMeters: 4.8, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_suv.png', hitHalfWidthUnits: 0.915 },
+  BUS: { kind: 'BUS', lengthMeters: 11, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_bus.png', hitHalfWidthUnits: 2.097 },
+  TRUCK: { kind: 'TRUCK', lengthMeters: 8.5, hitWidthScale: 0, heightScale: 0, sprite: 'assets/obstacles/obstacle_truck.png', hitHalfWidthUnits: 1.620 },
 };
 
 // Small/common obstacles spawn more often than big rare ones like buses.

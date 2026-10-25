@@ -68,12 +68,12 @@ data class RunTraits(
 }
 
 /**
- * Drawn width, in "base car widths", per meter of real vehicle length. Anchored so the player's
- * SUV (4.4 m) keeps the 1.47 base widths it already had; every other vehicle scales from its real
- * length (a 4.2 m sports car comes out narrower, a 11 m bus 2.5x wider). Mirrors
- * VEHICLE_WIDTH_PER_METER in the web catalog.js.
+ * Drawn width, in "base car widths", per meter of real vehicle length. Anchored on the player's
+ * SUV (4.4 m) at 1.47 base widths, then enlarged 10% (1.617); every other vehicle scales from its
+ * real length on the same scale (a 4.2 m sports car comes out narrower, an 11 m bus 2.5x wider).
+ * Mirrors VEHICLE_WIDTH_PER_METER in the web catalog.js.
  */
-const val VEHICLE_WIDTH_PER_METER = 1.47f / 4.4f
+const val VEHICLE_WIDTH_PER_METER = 1.47f * 1.1f / 4.4f
 
 /**
  * Obstacle sub-appearance; items are always a fuel-can pickup.
@@ -102,15 +102,16 @@ enum class ObstacleVariant(
     val hitHalfWidthUnits: Float,
     val lengthMeters: Float = 0f,
 ) {
-    CONE(0.3f, 0.45f, "obstacle_cone", 0.46f),
+    // The cone was shrunk 30% (0.3/0.45 -> 0.21/0.315; its hitbox 0.46 -> 0.322).
+    CONE(0.21f, 0.315f, "obstacle_cone", 0.322f),
     BARRIER(1.0f, 0.55f, "obstacle_barrier", 0.70f),
 
     // hitHalfWidthUnits for vehicles = 0.5 * lengthMeters * VEHICLE_WIDTH_PER_METER * 1.1275
     // (world units per base car width at the 16:9 reference) * 0.92 (graze forgiveness).
-    SEDAN(0f, 0f, "obstacle_sedan", 0.814f, lengthMeters = 4.7f),
-    SUV(0f, 0f, "obstacle_suv", 0.832f, lengthMeters = 4.8f),
-    BUS(0f, 0f, "obstacle_bus", 1.906f, lengthMeters = 11.0f),
-    TRUCK(0f, 0f, "obstacle_truck", 1.473f, lengthMeters = 8.5f),
+    SEDAN(0f, 0f, "obstacle_sedan", 0.895f, lengthMeters = 4.7f),
+    SUV(0f, 0f, "obstacle_suv", 0.915f, lengthMeters = 4.8f),
+    BUS(0f, 0f, "obstacle_bus", 2.097f, lengthMeters = 11.0f),
+    TRUCK(0f, 0f, "obstacle_truck", 1.620f, lengthMeters = 8.5f),
 }
 
 data class RoadEntity(
