@@ -65,7 +65,7 @@ class HighwayEngineTest {
     }
 
     private fun addTraffic(lx: Float, relativeZ: Float, speed: Float = 8f) {
-        engine.traffic.add(TrafficCar(nextId++, lx, engine.z + HW_PLAYER_DZ + relativeZ, speed, TrafficKind.CAR))
+        engine.traffic.add(TrafficCar(nextId++, lx, engine.z + HW_PLAYER_DZ + relativeZ, speed, TrafficKind.SEDAN))
     }
 
     @Test

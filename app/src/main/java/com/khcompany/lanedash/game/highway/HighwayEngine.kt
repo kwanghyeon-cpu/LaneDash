@@ -12,11 +12,21 @@ import com.khcompany.lanedash.game.SfxEvent
 import kotlin.math.abs
 import kotlin.random.Random
 
-/** Kinds of oncoming traffic; wider/taller ones are slower. [halfWidth] is in road half-widths. */
-enum class TrafficKind(val halfWidth: Float, val heightFactor: Float, val minSpeed: Float, val maxSpeed: Float) {
-    CAR(0.22f, 0.80f, 7f, 11f),
-    VAN(0.25f, 1.00f, 6f, 10f),
-    TRUCK(0.30f, 1.25f, 5f, 8f),
+/**
+ * Kinds of traffic ahead; wider/taller ones are slower. [halfWidth] is in road half-widths and
+ * [heightFactor] (height / width) matches the rear-view sprite named [spriteName].
+ */
+enum class TrafficKind(
+    val halfWidth: Float,
+    val heightFactor: Float,
+    val minSpeed: Float,
+    val maxSpeed: Float,
+    val spriteName: String,
+) {
+    SEDAN(0.22f, 0.74f, 7f, 11f, "traffic_rear_sedan"),
+    SUV(0.23f, 0.88f, 6.5f, 10.5f, "traffic_rear_suv"),
+    BUS(0.29f, 1.05f, 5.5f, 8.5f, "traffic_rear_bus"),
+    TRUCK(0.28f, 1.29f, 5f, 8f, "traffic_rear_truck"),
 }
 
 class TrafficCar(
@@ -144,9 +154,10 @@ class HighwayEngine(
         var lane = random.nextInt(HW_LANE_CENTERS.size)
         if (lane == lastLane) lane = (lane + 1 + random.nextInt(HW_LANE_CENTERS.size - 1)) % HW_LANE_CENTERS.size
         lastLane = lane
-        val kind = when (random.nextInt(10)) {
-            in 0..5 -> TrafficKind.CAR
-            in 6..7 -> TrafficKind.VAN
+        val kind = when (random.nextInt(20)) {
+            in 0..7 -> TrafficKind.SEDAN
+            in 8..13 -> TrafficKind.SUV
+            in 14..16 -> TrafficKind.BUS
             else -> TrafficKind.TRUCK
         }
         val carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * random.nextFloat()

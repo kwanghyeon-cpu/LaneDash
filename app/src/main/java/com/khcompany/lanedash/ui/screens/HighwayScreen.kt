@@ -99,6 +99,7 @@ fun HighwayScreen(
     val strips = remember { RoadStrips() }
     var skyline by remember { mutableStateOf<ImageBitmap?>(null) }
     var playerSprite by remember { mutableStateOf<ImageBitmap?>(null) }
+    var trafficSprites by remember { mutableStateOf<Map<TrafficKind, ImageBitmap?>>(emptyMap()) }
     var ready by remember { mutableStateOf(false) }
 
     // Reused every frame: one batched path per color instead of hundreds of separate rects.
@@ -129,6 +130,7 @@ fun HighwayScreen(
     LaunchedEffect(Unit) {
         skyline = SpriteCache.load(context, city.spriteName)
         playerSprite = SpriteCache.load(context, car.rearSpriteName)
+        trafficSprites = TrafficKind.entries.associateWith { SpriteCache.load(context, it.spriteName) }
         ready = true
         engine.start()
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -212,16 +214,15 @@ fun HighwayScreen(
                 val t = HW_D0 / dz
                 val y = horizonY + roadH * t
                 val idx = strips.indexForY(y, h, rowH)
-                val width = traffic.kind.halfWidth * 2.2f * strips.halfWidth[idx]
-                val (body, roof) = trafficColors(traffic.kind)
-                drawRearCar(
-                    cx = strips.centerX[idx] + traffic.lx * strips.halfWidth[idx],
-                    bottomY = y,
-                    width = width,
-                    heightFactor = traffic.kind.heightFactor,
-                    body = body,
-                    roof = roof,
-                )
+                val width = traffic.kind.halfWidth * 2f * strips.halfWidth[idx]
+                val cx = strips.centerX[idx] + traffic.lx * strips.halfWidth[idx]
+                val trafficSprite = trafficSprites[traffic.kind]
+                if (trafficSprite != null) {
+                    drawRearSprite(trafficSprite, cx = cx, bottomY = y, width = width)
+                } else {
+                    val (body, roof) = trafficColors(traffic.kind)
+                    drawRearCar(cx, y, width, traffic.kind.heightFactor, body, roof)
+                }
             }
 
             // The player stays at the screen's horizontal center; the road slides under them.
@@ -382,8 +383,9 @@ private fun HighwayDialog(title: String, content: @Composable () -> Unit) {
 }
 
 private fun trafficColors(kind: TrafficKind): Pair<Color, Color> = when (kind) {
-    TrafficKind.CAR -> Color(0xFF8D99AE) to Color(0xFF2B2D3A)
-    TrafficKind.VAN -> Color(0xFF5C6478) to Color(0xFF2B2D3A)
+    TrafficKind.SEDAN -> Color(0xFF8D99AE) to Color(0xFF2B2D3A)
+    TrafficKind.SUV -> Color(0xFF5C6478) to Color(0xFF2B2D3A)
+    TrafficKind.BUS -> Color(0xFFA7AFBF) to Color(0xFF2B2D3A)
     TrafficKind.TRUCK -> Color(0xFF7F8CA8) to Color(0xFF3B4256)
 }
 
