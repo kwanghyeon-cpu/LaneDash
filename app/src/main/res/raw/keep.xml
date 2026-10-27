@@ -3,4 +3,4 @@
      can't see, so it would strip them from release builds. Keep them explicitly. -->
 <resources
     xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/city_*,@drawable/car_gen*,@drawable/obstacle_*,@drawable/home_background" />
+    tools:keep="@drawable/city_*,@drawable/car_gen*,@drawable/car_rear_*,@drawable/obstacle_*,@drawable/home_background" />

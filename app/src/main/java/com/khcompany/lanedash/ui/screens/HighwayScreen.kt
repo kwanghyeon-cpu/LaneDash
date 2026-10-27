@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -42,6 +43,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -95,6 +98,7 @@ fun HighwayScreen(
     }
     val strips = remember { RoadStrips() }
     var skyline by remember { mutableStateOf<ImageBitmap?>(null) }
+    var playerSprite by remember { mutableStateOf<ImageBitmap?>(null) }
     var ready by remember { mutableStateOf(false) }
 
     // Reused every frame: one batched path per color instead of hundreds of separate rects.
@@ -124,6 +128,7 @@ fun HighwayScreen(
 
     LaunchedEffect(Unit) {
         skyline = SpriteCache.load(context, city.spriteName)
+        playerSprite = SpriteCache.load(context, car.rearSpriteName)
         ready = true
         engine.start()
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -222,14 +227,20 @@ fun HighwayScreen(
             // The player stays at the screen's horizontal center; the road slides under them.
             val playerY = horizonY + roadH * HW_PLAYER_T
             val playerIdx = strips.indexForY(playerY, h, rowH)
-            drawRearCar(
-                cx = w / 2f,
-                bottomY = playerY,
-                width = 0.44f * strips.halfWidth[playerIdx],
-                heightFactor = 0.8f,
-                body = car.bodyColor,
-                roof = car.roofColor,
-            )
+            val playerWidth = 0.44f * strips.halfWidth[playerIdx]
+            val sprite = playerSprite
+            if (sprite != null) {
+                drawRearSprite(sprite, cx = w / 2f, bottomY = playerY, width = playerWidth)
+            } else {
+                drawRearCar(
+                    cx = w / 2f,
+                    bottomY = playerY,
+                    width = playerWidth,
+                    heightFactor = 0.8f,
+                    body = car.bodyColor,
+                    roof = car.roofColor,
+                )
+            }
         }
 
         // Steering: hold the left or right half of the screen.
@@ -374,6 +385,19 @@ private fun trafficColors(kind: TrafficKind): Pair<Color, Color> = when (kind) {
     TrafficKind.CAR -> Color(0xFF8D99AE) to Color(0xFF2B2D3A)
     TrafficKind.VAN -> Color(0xFF5C6478) to Color(0xFF2B2D3A)
     TrafficKind.TRUCK -> Color(0xFF7F8CA8) to Color(0xFF3B4256)
+}
+
+/** Draws a rear-view sprite bottom-anchored at [bottomY]; the height follows the image's own aspect. */
+private fun DrawScope.drawRearSprite(sprite: ImageBitmap, cx: Float, bottomY: Float, width: Float) {
+    val height = width * sprite.height / sprite.width
+    drawGroundShadow(cx, bottomY, width, height)
+    drawImage(
+        image = sprite,
+        srcSize = IntSize(sprite.width, sprite.height),
+        dstOffset = IntOffset((cx - width / 2f).roundToInt(), (bottomY - height).roundToInt()),
+        dstSize = IntSize(width.roundToInt(), height.roundToInt()),
+        filterQuality = FilterQuality.Medium,
+    )
 }
 
 /** Placeholder rear view: wheels, body, cabin and two tail lights — replaced by sprites later. */

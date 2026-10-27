@@ -176,6 +176,8 @@ data class CarOption(
      * game falls back to the procedural vector silhouette for [bodyStyle].
      */
     val spriteName: String = "",
+    /** Behind-the-car sprite for the Highway mode; empty falls back to the placeholder drawing. */
+    val rearSpriteName: String = "",
     /** Real-world vehicle length, which sets how wide it's drawn relative to the others. */
     val lengthMeters: Float = 4.4f,
 )
@@ -258,6 +260,7 @@ object GameCatalog {
             bodyShade = Color(0xFFB22C39),
             roofColor = Color(0xFF1D1D2C),
             spriteName = "car_gen1",
+            rearSpriteName = "car_rear_1",
         ),
         CarOption(
             id = "sports_car",
@@ -268,6 +271,7 @@ object GameCatalog {
             bodyShade = Color(0xFFCC7A1E),
             roofColor = Color(0xFF2B2B2B),
             spriteName = "car_gen2",
+            rearSpriteName = "car_rear_2",
             lengthMeters = 4.2f,
         ),
         CarOption(
@@ -279,6 +283,7 @@ object GameCatalog {
             bodyShade = Color(0xFF2A63BF),
             roofColor = Color(0xFF1A2340),
             spriteName = "car_gen3",
+            rearSpriteName = "car_rear_3",
         ),
         CarOption(
             id = "van",
@@ -289,6 +294,7 @@ object GameCatalog {
             bodyShade = Color(0xFF357A38),
             roofColor = Color(0xFF22331F),
             spriteName = "car_gen4",
+            rearSpriteName = "car_rear_4",
             lengthMeters = 4.8f,
         ),
     )
