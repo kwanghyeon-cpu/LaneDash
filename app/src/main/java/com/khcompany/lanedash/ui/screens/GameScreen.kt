@@ -664,7 +664,7 @@ private fun LaneButton(icon: GameIcon, description: String, onClick: () -> Unit)
 
 /** Small leading icon + bold label, used inside buttons. */
 @Composable
-private fun ButtonLabel(icon: GameIcon, text: String, color: Color = Color.Unspecified) {
+internal fun ButtonLabel(icon: GameIcon, text: String, color: Color = Color.Unspecified) {
     val tint = if (color == Color.Unspecified) LocalContentColor.current else color
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Icon(imageVector = icon.vector, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
@@ -674,7 +674,7 @@ private fun ButtonLabel(icon: GameIcon, text: String, color: Color = Color.Unspe
 
 /** HUD readout: icon + text in one color. */
 @Composable
-private fun HudIconText(icon: GameIcon, text: String, color: Color, style: androidx.compose.ui.text.TextStyle, iconSize: Int, modifier: Modifier = Modifier) {
+internal fun HudIconText(icon: GameIcon, text: String, color: Color, style: androidx.compose.ui.text.TextStyle, iconSize: Int, modifier: Modifier = Modifier) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
         Icon(imageVector = icon.vector, contentDescription = null, tint = color, modifier = Modifier.size(iconSize.dp))
         Text(text = text, style = style, color = color)

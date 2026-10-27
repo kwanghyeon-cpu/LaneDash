@@ -47,6 +47,9 @@ fun laneSizeScale(lane: Float): Float {
 
 enum class GameStatus { READY, RUNNING, GAME_OVER }
 
+/** Which game the player picked on the mode-select screen. */
+enum class GameMode { CLASSIC, HIGHWAY }
+
 enum class EntityKind { OBSTACLE, ITEM }
 
 /** What a pickup does: refuel, a timed invincibility shield, or a timed fuel magnet. */
