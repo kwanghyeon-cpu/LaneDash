@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,21 +28,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.khcompany.lanedash.game.GameMode
 import com.khcompany.lanedash.game.LeaderboardEntry
 import com.khcompany.lanedash.game.LeaderboardRepository
 
 @Composable
 fun LeaderboardScreen(
     repository: LeaderboardRepository,
+    initialMode: GameMode,
+    /** The just-submitted entry is highlighted only on this mode's board. */
+    highlightMode: GameMode,
     highlightName: String?,
     highlightScore: Int?,
     onHome: () -> Unit,
 ) {
+    var mode by remember { mutableStateOf(initialMode) }
     var entries by remember { mutableStateOf<List<LeaderboardEntry>?>(null) }
     var loadFailed by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(mode) {
+        entries = null
+        loadFailed = false
         entries = try {
-            repository.fetchTopScores(10)
+            repository.fetchTopScores(10, mode)
         } catch (e: Exception) {
             android.util.Log.e("Leaderboard", "fetchTopScores failed", e)
             loadFailed = true
@@ -63,8 +72,26 @@ fun LeaderboardScreen(
             text = "전체 순위",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            modifier = Modifier.padding(bottom = 16.dp),
+            modifier = Modifier.padding(bottom = 10.dp),
         )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 12.dp),
+        ) {
+            for ((tabMode, label) in listOf(GameMode.CLASSIC to "클래식", GameMode.HIGHWAY to "하이웨이")) {
+                val selected = mode == tabMode
+                Button(
+                    onClick = { mode = tabMode },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
+                ) {
+                    Text(text = label, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         val currentEntries = entries
         if (currentEntries == null) {
@@ -94,7 +121,8 @@ fun LeaderboardScreen(
             ) {
                 items(currentEntries.size) { index ->
                     val entry = currentEntries[index]
-                    val isHighlighted = highlightName != null &&
+                    val isHighlighted = mode == highlightMode &&
+                        highlightName != null &&
                         entry.name == highlightName &&
                         entry.score == highlightScore
                     LeaderboardRow(rank = index + 1, entry = entry, highlighted = isHighlighted)

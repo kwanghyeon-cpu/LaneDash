@@ -7,14 +7,21 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-private const val COLLECTION = "scores"
+/**
+ * One Firestore collection per mode. The classic board keeps the original "scores" collection so
+ * existing entries (and the web version, which shares it) are untouched.
+ */
+internal fun leaderboardCollection(mode: GameMode): String = when (mode) {
+    GameMode.CLASSIC -> "scores"
+    GameMode.HIGHWAY -> "scores_highway"
+}
 
 /** Global leaderboard backed by Firestore — every entry here is shared across all players. */
 class FirestoreLeaderboardRepository : LeaderboardRepository {
     private val db = FirebaseFirestore.getInstance()
 
-    override suspend fun fetchTopScores(limit: Int): List<LeaderboardEntry> {
-        val snapshot = db.collection(COLLECTION)
+    override suspend fun fetchTopScores(limit: Int, mode: GameMode): List<LeaderboardEntry> {
+        val snapshot = db.collection(leaderboardCollection(mode))
             .orderBy("score", Query.Direction.DESCENDING)
             .limit(limit.toLong())
             .get()
@@ -26,12 +33,12 @@ class FirestoreLeaderboardRepository : LeaderboardRepository {
         }
     }
 
-    override suspend fun submitScore(name: String, score: Int) {
+    override suspend fun submitScore(name: String, score: Int, mode: GameMode) {
         val data = hashMapOf(
             "name" to name.trim().take(12).ifBlank { "PLAYER" },
             "score" to score,
         )
-        db.collection(COLLECTION).add(data).await()
+        db.collection(leaderboardCollection(mode)).add(data).await()
     }
 }
 

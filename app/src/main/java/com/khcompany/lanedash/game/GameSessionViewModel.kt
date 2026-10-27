@@ -43,6 +43,8 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
         private set
 
     fun reportHighwayScore(score: Int) {
+        lastRunScore = score
+        lastRunMode = GameMode.HIGHWAY
         if (score > highwayHighScore) {
             highwayHighScore = score
             prefs.edit().putInt(KEY_HIGHWAY_HIGH_SCORE, score).apply()
@@ -51,6 +53,10 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
 
     /** Score from the run that just ended, so the leaderboard flow can reference it after nav. */
     var lastRunScore by mutableIntStateOf(0)
+        private set
+
+    /** Mode of the run that just ended: decides which leaderboard a submission goes to. */
+    var lastRunMode by mutableStateOf(GameMode.CLASSIC)
         private set
 
     /** Name just submitted for [lastRunScore], so the leaderboard screen can highlight it. */
@@ -69,6 +75,7 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
 
     fun reportScore(score: Int) {
         lastRunScore = score
+        lastRunMode = GameMode.CLASSIC
         if (score > highScore) {
             highScore = score
             prefs.edit().putInt(KEY_HIGH_SCORE, score).apply()
@@ -90,7 +97,7 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
     fun submitToLeaderboard(name: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                leaderboardRepository.submitScore(name, lastRunScore)
+                leaderboardRepository.submitScore(name, lastRunScore, lastRunMode)
                 justSubmittedName = name.trim().take(12).ifBlank { "PLAYER" }
             } catch (e: Exception) {
                 Log.e(TAG, "submitScore failed", e)

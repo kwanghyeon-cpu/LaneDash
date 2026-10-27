@@ -116,6 +116,16 @@ fun LaneDashApp(adManager: AdManager, modifier: Modifier = Modifier) {
                 car = GameCatalog.carById(session.selectedCarId),
                 highScore = session.highwayHighScore,
                 onScoreFinal = { session.reportHighwayScore(it) },
+                leaderboardRepository = session.leaderboardRepository,
+                onSubmitScore = { name ->
+                    session.submitToLeaderboard(name) {
+                        navController.navigate(Routes.LEADERBOARD)
+                    }
+                },
+                onViewLeaderboard = {
+                    session.clearJustSubmitted()
+                    navController.navigate(Routes.LEADERBOARD)
+                },
                 onExit = {
                     navController.popBackStack(Routes.HOME, inclusive = false)
                 },
@@ -124,6 +134,8 @@ fun LaneDashApp(adManager: AdManager, modifier: Modifier = Modifier) {
         composable(Routes.LEADERBOARD) {
             LeaderboardScreen(
                 repository = session.leaderboardRepository,
+                initialMode = session.lastRunMode,
+                highlightMode = session.lastRunMode,
                 highlightName = session.justSubmittedName,
                 highlightScore = session.lastRunScore,
                 onHome = {

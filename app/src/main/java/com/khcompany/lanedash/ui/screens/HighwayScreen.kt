@@ -15,11 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,7 +55,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.khcompany.lanedash.audio.SoundManager
 import com.khcompany.lanedash.game.CarOption
 import com.khcompany.lanedash.game.CityTheme
+import com.khcompany.lanedash.game.GameMode
 import com.khcompany.lanedash.game.GameStatus
+import com.khcompany.lanedash.game.LeaderboardRepository
 import com.khcompany.lanedash.game.highway.HW_D0
 import com.khcompany.lanedash.game.highway.HW_DRAW_DISTANCE
 import com.khcompany.lanedash.game.highway.HW_HORIZON_FRACTION
@@ -84,6 +90,9 @@ fun HighwayScreen(
     car: CarOption,
     highScore: Int,
     onScoreFinal: (Int) -> Unit,
+    leaderboardRepository: LeaderboardRepository,
+    onSubmitScore: (name: String) -> Unit,
+    onViewLeaderboard: () -> Unit,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -296,6 +305,21 @@ fun HighwayScreen(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
                 )
+                HighwayRankSection(
+                    score = engine.score,
+                    leaderboardRepository = leaderboardRepository,
+                    soundManager = soundManager,
+                    onSubmitScore = onSubmitScore,
+                )
+                Button(
+                    onClick = onViewLeaderboard,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                ) {
+                    ButtonLabel(GameIcon.RANKING, "순위표", MaterialTheme.colorScheme.onBackground)
+                }
                 Button(onClick = { engine.start() }, modifier = Modifier.fillMaxWidth()) {
                     ButtonLabel(GameIcon.RETRY, "RETRY")
                 }
@@ -355,6 +379,76 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
     }
 }
 
+/** Checks the run against the highway TOP 10 and, if it makes it, asks for a name to submit. */
+@Composable
+private fun HighwayRankSection(
+    score: Int,
+    leaderboardRepository: LeaderboardRepository,
+    soundManager: SoundManager,
+    onSubmitScore: (name: String) -> Unit,
+) {
+    var qualifies by remember(score) { mutableStateOf<Boolean?>(null) }
+    var pointsToTop by remember(score) { mutableStateOf<Int?>(null) }
+    var submitted by remember(score) { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    LaunchedEffect(score) {
+        val top = try {
+            leaderboardRepository.fetchTopScores(10, GameMode.HIGHWAY)
+        } catch (e: Exception) {
+            android.util.Log.e("Leaderboard", "fetchTopScores failed", e)
+            null
+        }
+        qualifies = top != null && score > 0 && (top.size < 10 || score > top.last().score)
+        pointsToTop = if (top != null && top.size >= 10 && score <= top.last().score) {
+            top.last().score - score + 1
+        } else {
+            null
+        }
+        if (qualifies == true) soundManager.playNewBest()
+    }
+
+    pointsToTop?.let {
+        Text(
+            text = "TOP 10까지 ${it}점!",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
+    }
+    if (qualifies == true && !submitted) {
+        HudIconText(
+            icon = GameIcon.TROPHY,
+            text = "TOP 10 진입!",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodyLarge,
+            iconSize = 20,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        OutlinedTextField(
+            value = name,
+            onValueChange = { if (it.length <= 12) name = it },
+            singleLine = true,
+            placeholder = { Text("이름 입력") },
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(
+            onClick = {
+                submitted = true
+                onSubmitScore(name)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 8.dp),
+        ) {
+            Text(text = "등록하기", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
 @Composable
 private fun HighwayDialog(title: String, content: @Composable () -> Unit) {
     Box(
@@ -367,6 +461,7 @@ private fun HighwayDialog(title: String, content: @Composable () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth(0.84f)
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
