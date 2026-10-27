@@ -37,7 +37,10 @@ class TrafficCar(
     var z: Float,
     val speed: Float,
     val kind: TrafficKind,
-)
+) {
+    /** Set once the car is behind the player (near-miss bonus is judged at that moment). */
+    var passed = false
+}
 
 /**
  * Simulation for the behind-the-car mode. Pure and resolution independent, like GameEngine:
@@ -79,7 +82,7 @@ class HighwayEngine(
     private var steerVelocity = 0f
     private var spawnCooldown = 1f
     private var nextId = 0L
-    private var lastLane = -1
+    private var bonusScore = 0
 
     val offRoad: Boolean get() = abs(playerX) > 1f
 
@@ -92,12 +95,12 @@ class HighwayEngine(
         playerX = 0f
         speed = START_SPEED
         score = 0
+        bonusScore = 0
         elapsedSeconds = 0f
         heading = 0f
         steerInput = 0
         steerVelocity = 0f
         spawnCooldown = 1f
-        lastLane = -1
     }
 
     fun pause() {
@@ -113,12 +116,16 @@ class HighwayEngine(
         val dt = dtSeconds.coerceAtMost(0.05f)
         elapsedSeconds += dt
 
-        // Speed: auto-accelerates to the top speed; the grass drags it down.
-        val target = if (offRoad) OFFROAD_SPEED else MAX_SPEED
+        // Difficulty eases from 0 to 1 over the first RAMP_SECONDS of a run, then stays maxed.
+        val difficulty = (elapsedSeconds / RAMP_SECONDS).coerceIn(0f, 1f)
+
+        // Speed: auto-accelerates toward a top speed that creeps up with difficulty; the grass
+        // drags it down.
+        val topSpeed = EARLY_TOP_SPEED + (MAX_SPEED - EARLY_TOP_SPEED) * difficulty
+        val target = if (offRoad) OFFROAD_SPEED else topSpeed
         speed = if (speed < target) minOf(target, speed + ACCELERATION * dt) else maxOf(target, speed - DECELERATION * dt)
         z += speed * dt
         heading += curveAt(z) * speed * dt
-        score = (z * SCORE_PER_UNIT).toInt()
 
         // Steering has a little inertia, and bends in the road push the car outward.
         steerVelocity += (steerInput.toFloat() - steerVelocity) * minOf(1f, dt * 9f)
@@ -129,10 +136,12 @@ class HighwayEngine(
 
         spawnCooldown -= dt
         if (spawnCooldown <= 0f) {
-            spawnTraffic()
-            val speedNorm = (speed / MAX_SPEED).coerceIn(0f, 1f)
-            spawnCooldown = (SPAWN_MAX_INTERVAL - (SPAWN_MAX_INTERVAL - SPAWN_MIN_INTERVAL) * speedNorm) *
-                (0.7f + 0.6f * random.nextFloat())
+            spawnCooldown = if (spawnTraffic(difficulty)) {
+                (SPAWN_EASY_INTERVAL + (SPAWN_HARD_INTERVAL - SPAWN_EASY_INTERVAL) * difficulty) *
+                    (0.7f + 0.6f * random.nextFloat())
+            } else {
+                SPAWN_RETRY_INTERVAL
+            }
         }
 
         val iterator = traffic.listIterator()
@@ -140,20 +149,42 @@ class HighwayEngine(
             val car = iterator.next()
             car.z += car.speed * dt
             val relative = car.z - (z + HW_PLAYER_DZ)
-            if (abs(relative) < COLLISION_DEPTH && abs(car.lx - playerX) < PLAYER_HALF_WIDTH + car.kind.halfWidth) {
+            val lateral = abs(car.lx - playerX)
+            if (abs(relative) < COLLISION_DEPTH && lateral < PLAYER_HALF_WIDTH + car.kind.halfWidth) {
                 onSfx(SfxEvent.CRASH)
                 status = GameStatus.GAME_OVER
                 gameOverReason = GameOverReason.COLLISION
+                score = currentScore()
                 return
+            }
+            if (!car.passed && relative < -COLLISION_DEPTH) {
+                car.passed = true
+                if (lateral < PLAYER_HALF_WIDTH + car.kind.halfWidth + NEAR_MISS_MARGIN) {
+                    bonusScore += NEAR_MISS_SCORE
+                    onSfx(SfxEvent.NEAR_MISS)
+                }
             }
             if (relative < -REMOVE_BEHIND) iterator.remove()
         }
+        score = currentScore()
     }
 
-    private fun spawnTraffic() {
-        var lane = random.nextInt(HW_LANE_CENTERS.size)
-        if (lane == lastLane) lane = (lane + 1 + random.nextInt(HW_LANE_CENTERS.size - 1)) % HW_LANE_CENTERS.size
-        lastLane = lane
+    private fun currentScore(): Int = (z * SCORE_PER_UNIT).toInt() + bonusScore
+
+    /** When [car] will reach the player's position at the current speeds (0 if it already has). */
+    private fun secondsUntilPassing(car: TrafficCar): Float {
+        val gap = car.z - (z + HW_PLAYER_DZ)
+        if (gap <= 0f) return 0f
+        return gap / (speed - car.speed).coerceAtLeast(MIN_CLOSING_SPEED)
+    }
+
+    /**
+     * Adds one car, or none if no lane can take it fairly. A lane change takes ~half a second, so
+     * two cars in different lanes must pass the player at least that far apart (scaled with the
+     * lane distance) — otherwise random spawns create walls nobody can dodge. The required
+     * separation tightens as [difficulty] rises. Returns whether a car was added.
+     */
+    private fun spawnTraffic(difficulty: Float): Boolean {
         val kind = when (random.nextInt(20)) {
             in 0..7 -> TrafficKind.SEDAN
             in 8..13 -> TrafficKind.SUV
@@ -161,12 +192,32 @@ class HighwayEngine(
             else -> TrafficKind.TRUCK
         }
         val carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * random.nextFloat()
-        traffic.add(TrafficCar(nextId++, HW_LANE_CENTERS[lane], z + HW_DRAW_DISTANCE - 1f, carSpeed, kind))
+        val spawnZ = z + HW_DRAW_DISTANCE - 1f
+        val passIn = (spawnZ - (z + HW_PLAYER_DZ)) / (speed - carSpeed).coerceAtLeast(MIN_CLOSING_SPEED)
+        val separation = SEPARATION_EASY + (SEPARATION_HARD - SEPARATION_EASY) * difficulty
+
+        val lanes = HW_LANE_CENTERS.indices.shuffled(random)
+        for (lane in lanes) {
+            val fair = traffic.none { other ->
+                if (other.passed) return@none false
+                val otherLane = HW_LANE_CENTERS.indices.minBy { abs(HW_LANE_CENTERS[it] - other.lx) }
+                val needed = separation * (1f + LANE_DISTANCE_WEIGHT * abs(lane - otherLane))
+                abs(secondsUntilPassing(other) - passIn) < needed
+            }
+            if (!fair) continue
+            traffic.add(TrafficCar(nextId++, HW_LANE_CENTERS[lane], spawnZ, carSpeed, kind))
+            return true
+        }
+        return false
     }
 
     companion object {
         const val START_SPEED = 14f
-        const val MAX_SPEED = 42f
+
+        /** Top speed at the start of a run; it climbs to [MAX_SPEED] over [RAMP_SECONDS]. */
+        const val EARLY_TOP_SPEED = 32f
+        const val MAX_SPEED = 46f
+        const val RAMP_SECONDS = 120f
         const val OFFROAD_SPEED = 10f
         const val ACCELERATION = 1.6f
         const val DECELERATION = 14f
@@ -177,7 +228,23 @@ class HighwayEngine(
         const val COLLISION_DEPTH = 0.45f
         const val REMOVE_BEHIND = 4f
         const val SCORE_PER_UNIT = 1.5f
-        const val SPAWN_MAX_INTERVAL = 1.5f
-        const val SPAWN_MIN_INTERVAL = 0.55f
+        const val NEAR_MISS_SCORE = 50
+
+        /** Extra lateral distance beyond touching that still counts as a near miss. */
+        const val NEAR_MISS_MARGIN = 0.14f
+
+        // Traffic density: seconds between spawn attempts, easy -> hard.
+        const val SPAWN_EASY_INTERVAL = 1.4f
+        const val SPAWN_HARD_INTERVAL = 0.6f
+        const val SPAWN_RETRY_INTERVAL = 0.08f
+
+        /**
+         * Minimum seconds between two cars passing the player in the same lane, easy -> hard; each
+         * lane of distance between them adds [LANE_DISTANCE_WEIGHT] times that on top.
+         */
+        const val SEPARATION_EASY = 0.6f
+        const val SEPARATION_HARD = 0.32f
+        const val LANE_DISTANCE_WEIGHT = 1.0f
+        const val MIN_CLOSING_SPEED = 1f
     }
 }
