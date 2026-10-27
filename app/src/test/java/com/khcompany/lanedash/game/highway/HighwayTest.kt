@@ -83,6 +83,26 @@ class HighwayEngineTest {
     }
 
     @Test
+    fun aNearMissFlashesBrieflyThenFades() {
+        addTraffic(lx = 0.5f, relativeZ = 1f)
+        tickUntilPassed(engine.traffic.last())
+        assertEquals(HighwayEngine.NEAR_MISS_FLASH_SECONDS, engine.nearMissFlash, 0.05f)
+        repeat(70) { engine.traffic.clear(); engine.tick(0.016f) } // ~1.1 s
+        assertEquals(0f, engine.nearMissFlash, 0f)
+    }
+
+    @Test
+    fun theCarLeansIntoTheTurn() {
+        assertEquals(0f, engine.steerLean, 0f)
+        engine.steerInput = 1
+        repeat(10) { engine.tick(0.016f) }
+        assertTrue(engine.steerLean > 0.5f)
+        engine.steerInput = -1
+        repeat(30) { engine.tick(0.016f) }
+        assertTrue(engine.steerLean < -0.5f)
+    }
+
+    @Test
     fun passingFarFromACarEarnsNothingExtra() {
         addTraffic(lx = 0.95f, relativeZ = 1f)
         val car = engine.traffic.last()

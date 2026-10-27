@@ -79,7 +79,14 @@ class HighwayEngine(
 
     val traffic = mutableStateListOf<TrafficCar>()
 
+    /** Seconds left of the "NEAR MISS" flash after the latest close pass (0 when idle). */
+    var nearMissFlash by mutableFloatStateOf(0f)
+        private set
+
     private var steerVelocity = 0f
+
+    /** Current steering, -1..1 with the same inertia as the car; the UI leans the sprite by it. */
+    val steerLean: Float get() = steerVelocity
     private var spawnCooldown = 1f
     private var nextId = 0L
     private var bonusScore = 0
@@ -96,6 +103,7 @@ class HighwayEngine(
         speed = START_SPEED
         score = 0
         bonusScore = 0
+        nearMissFlash = 0f
         elapsedSeconds = 0f
         heading = 0f
         steerInput = 0
@@ -115,6 +123,7 @@ class HighwayEngine(
         if (status != GameStatus.RUNNING || paused) return
         val dt = dtSeconds.coerceAtMost(0.05f)
         elapsedSeconds += dt
+        if (nearMissFlash > 0f) nearMissFlash = maxOf(0f, nearMissFlash - dt)
 
         // Difficulty eases from 0 to 1 over the first RAMP_SECONDS of a run, then stays maxed.
         val difficulty = (elapsedSeconds / RAMP_SECONDS).coerceIn(0f, 1f)
@@ -161,6 +170,7 @@ class HighwayEngine(
                 car.passed = true
                 if (lateral < PLAYER_HALF_WIDTH + car.kind.halfWidth + NEAR_MISS_MARGIN) {
                     bonusScore += NEAR_MISS_SCORE
+                    nearMissFlash = NEAR_MISS_FLASH_SECONDS
                     onSfx(SfxEvent.NEAR_MISS)
                 }
             }
@@ -232,6 +242,7 @@ class HighwayEngine(
 
         /** Extra lateral distance beyond touching that still counts as a near miss. */
         const val NEAR_MISS_MARGIN = 0.14f
+        const val NEAR_MISS_FLASH_SECONDS = 0.9f
 
         // Traffic density: seconds between spawn attempts, easy -> hard.
         const val SPAWN_EASY_INTERVAL = 1.4f

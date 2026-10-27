@@ -43,7 +43,11 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -71,10 +75,17 @@ import com.khcompany.lanedash.ui.components.SpriteCache
 import com.khcompany.lanedash.ui.components.drawCitySkylineSprite
 import com.khcompany.lanedash.ui.components.drawGroundShadow
 import com.khcompany.lanedash.ui.components.drawRoadHaze
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private const val STRIPE_LENGTH = 4f
+
+/** Scale applied to the road layer so its vibration never exposes an empty edge. */
+private const val SHAKE_ZOOM = 1.02f
+private const val MAX_LEAN_DEGREES = 4f
+private const val VIGNETTE_MAX_ALPHA = 0.5f
 private val ROAD_GRASS = Color(0xFF2E7D32)
 private val RUMBLE_RED = Color(0xFFC4343A)
 private val RUMBLE_WHITE = Color(0xFFD8D8D8)
@@ -118,6 +129,7 @@ fun HighwayScreen(
     val rumbleRed = remember { Path() }
     val rumbleWhite = remember { Path() }
     val laneMarks = remember { Path() }
+    val roadside = remember { RoadsideBatch() }
 
     DisposableEffect(Unit) {
         onDispose { soundManager.release() }
@@ -162,7 +174,19 @@ fun HighwayScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                // Road vibration: grows with speed, and the grass shakes the car much harder. The
+                // slight zoom keeps the shifted frame from showing an empty edge.
+                .graphicsLayer {
+                    val speedRatio = (engine.speed / HighwayEngine.MAX_SPEED).coerceIn(0f, 1f)
+                    val amplitude = size.height * (0.0009f * speedRatio * speedRatio + if (engine.offRoad) 0.0022f else 0f)
+                    scaleX = SHAKE_ZOOM
+                    scaleY = SHAKE_ZOOM
+                    translationY = (sin(engine.z * 1.7f) * 0.6f + sin(engine.z * 4.1f) * 0.4f) * amplitude
+                },
+        ) {
             if (!ready) {
                 drawRect(Color.Black)
                 return@Canvas
@@ -214,7 +238,22 @@ fun HighwayScreen(
             drawPath(roadLight, lerp(city.roadColor, Color.White, 0.10f))
             drawPath(roadDark, lerp(city.roadColor, Color.White, 0.05f))
             drawPath(laneMarks, city.roadLineColor.copy(alpha = 0.9f))
+            drawRoadside(
+                batch = roadside,
+                strips = strips,
+                cameraZ = engine.z,
+                horizonY = horizonY,
+                rowHeight = rowH,
+                postColor = lerp(Color(0xFF3A3F4B), city.haze, 0.15f),
+                lampColor = Color(0xFFFFE9A8),
+                bushColor = lerp(Color(0xFF1F5E27), city.haze, 0.2f),
+            )
             drawRoadHaze(city, horizonY)
+            drawSpeedLines(
+                speedRatio = engine.speed / HighwayEngine.MAX_SPEED,
+                elapsedSeconds = engine.elapsedSeconds,
+                focalY = horizonY + roadH * 0.2f,
+            )
 
             // Traffic, far to near so closer cars paint over farther ones.
             for (traffic in engine.traffic.sortedByDescending { it.z }) {
@@ -240,7 +279,13 @@ fun HighwayScreen(
             val playerWidth = 0.44f * strips.halfWidth[playerIdx]
             val sprite = playerSprite
             if (sprite != null) {
-                drawRearSprite(sprite, cx = w / 2f, bottomY = playerY, width = playerWidth)
+                drawRearSprite(
+                    sprite,
+                    cx = w / 2f,
+                    bottomY = playerY,
+                    width = playerWidth,
+                    leanDegrees = engine.steerLean * MAX_LEAN_DEGREES,
+                )
             } else {
                 drawRearCar(
                     cx = w / 2f,
@@ -252,6 +297,25 @@ fun HighwayScreen(
                 )
             }
         }
+
+        // Tunnel vision: the screen edges darken as the speed climbs.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithCache {
+                    val brush = Brush.radialGradient(
+                        0.5f to Color.Transparent,
+                        1f to Color.Black,
+                        center = Offset(size.width / 2f, size.height * 0.55f),
+                        radius = hypot(size.width, size.height) * 0.55f,
+                    )
+                    onDrawBehind {
+                        val speedRatio = (engine.speed / HighwayEngine.MAX_SPEED).coerceIn(0f, 1f)
+                        val alpha = ((speedRatio - 0.5f) / 0.5f).coerceIn(0f, 1f) * VIGNETTE_MAX_ALPHA
+                        if (alpha > 0.01f) drawRect(brush, alpha = alpha)
+                    }
+                },
+        )
 
         // Steering: hold the left or right half of the screen.
         Box(
@@ -365,6 +429,17 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
                     color = MaterialTheme.colorScheme.onBackground,
                 )
             }
+        }
+        if (engine.nearMissFlash > 0f) {
+            Text(
+                text = "NEAR MISS +${HighwayEngine.NEAR_MISS_SCORE}",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 110.dp)
+                    .alpha((engine.nearMissFlash / HighwayEngine.NEAR_MISS_FLASH_SECONDS * 1.6f).coerceIn(0f, 1f)),
+            )
         }
         if (engine.status == GameStatus.RUNNING && engine.elapsedSeconds < 4f) {
             Text(
@@ -485,16 +560,25 @@ private fun trafficColors(kind: TrafficKind): Pair<Color, Color> = when (kind) {
 }
 
 /** Draws a rear-view sprite bottom-anchored at [bottomY]; the height follows the image's own aspect. */
-private fun DrawScope.drawRearSprite(sprite: ImageBitmap, cx: Float, bottomY: Float, width: Float) {
+private fun DrawScope.drawRearSprite(
+    sprite: ImageBitmap,
+    cx: Float,
+    bottomY: Float,
+    width: Float,
+    leanDegrees: Float = 0f,
+) {
     val height = width * sprite.height / sprite.width
     drawGroundShadow(cx, bottomY, width, height)
-    drawImage(
-        image = sprite,
-        srcSize = IntSize(sprite.width, sprite.height),
-        dstOffset = IntOffset((cx - width / 2f).roundToInt(), (bottomY - height).roundToInt()),
-        dstSize = IntSize(width.roundToInt(), height.roundToInt()),
-        filterQuality = FilterQuality.Medium,
-    )
+    // Leaning pivots on the tires' contact line so the car rolls into the turn, not off its shadow.
+    rotate(leanDegrees, pivot = Offset(cx, bottomY)) {
+        drawImage(
+            image = sprite,
+            srcSize = IntSize(sprite.width, sprite.height),
+            dstOffset = IntOffset((cx - width / 2f).roundToInt(), (bottomY - height).roundToInt()),
+            dstSize = IntSize(width.roundToInt(), height.roundToInt()),
+            filterQuality = FilterQuality.Medium,
+        )
+    }
 }
 
 /** Placeholder rear view: wheels, body, cabin and two tail lights — replaced by sprites later. */
