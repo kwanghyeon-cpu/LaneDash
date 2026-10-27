@@ -6,7 +6,7 @@
 <title>Lane Dash</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css" />
-<link rel="stylesheet" href="style.css?v=8" />
+<link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
 
@@ -22,6 +22,15 @@
         <p id="home-best" class="best-text"></p>
         <button id="btn-play" class="btn btn-primary btn-big">PLAY</button>
       </div>
+    </section>
+
+    <!-- MODE SELECT -->
+    <section id="screen-mode" class="screen">
+      <div class="select-header">
+        <h2>게임 모드</h2>
+      </div>
+      <div id="mode-grid" class="card-grid mode-grid"></div>
+      <button id="btn-mode-next" class="btn btn-primary btn-wide">다음: 도시 선택</button>
     </section>
 
     <!-- CITY SELECT -->
@@ -117,6 +126,10 @@
       <div class="select-header">
         <h2>TOP 10</h2>
         <p class="leaderboard-subtitle">전체 순위</p>
+        <div class="lb-tabs">
+          <button id="lb-tab-classic" class="btn lb-tab" data-mode="classic">클래식</button>
+          <button id="lb-tab-highway" class="btn lb-tab" data-mode="highway">하이웨이</button>
+        </div>
       </div>
       <div id="leaderboard-list" class="leaderboard-list"></div>
       <button id="btn-leaderboard-home" class="btn btn-primary btn-wide">홈으로</button>
@@ -148,16 +161,18 @@
 
   </div>
 
-  <script src="js/catalog.js?v=12"></script>
+  <script src="js/catalog.js?v=13"></script>
   <script src="js/icons.js?v=1"></script>
   <!-- Same Firebase project as the Android app (lanedash-2cc5d), so scores set here land
        in the same shared "scores" collection / leaderboard. -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="js/leaderboard.js?v=1"></script>
+  <script src="js/leaderboard.js?v=2"></script>
   <script src="js/audio.js?v=7"></script>
   <script src="js/engine.js?v=11"></script>
   <script src="js/render.js?v=14"></script>
-  <script src="js/main.js?v=11"></script>
+  <script src="js/highway-engine.js?v=1"></script>
+  <script src="js/highway-render.js?v=1"></script>
+  <script src="js/main.js?v=12"></script>
 </body>
 </html>

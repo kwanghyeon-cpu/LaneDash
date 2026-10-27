@@ -17,10 +17,12 @@ const FIREBASE_CONFIG = {
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const leaderboardDb = firebase.firestore();
-const SCORES_COLLECTION = 'scores';
+// One collection per mode: the classic board keeps the original "scores" (shared with the app),
+// the behind-the-car highway mode has its own because the two modes' scores aren't comparable.
+const SCORES_COLLECTIONS = { classic: 'scores', highway: 'scores_highway' };
 
-async function fetchTopScores(limit = 10) {
-  const snapshot = await leaderboardDb.collection(SCORES_COLLECTION)
+async function fetchTopScores(limit = 10, mode = 'classic') {
+  const snapshot = await leaderboardDb.collection(SCORES_COLLECTIONS[mode])
     .orderBy('score', 'desc')
     .limit(limit)
     .get();
@@ -34,14 +36,14 @@ async function fetchTopScores(limit = 10) {
   return entries;
 }
 
-async function submitScore(name, score) {
+async function submitScore(name, score, mode = 'classic') {
   const cleanName = name.trim().slice(0, 12) || 'PLAYER';
-  await leaderboardDb.collection(SCORES_COLLECTION).add({ name: cleanName, score });
+  await leaderboardDb.collection(SCORES_COLLECTIONS[mode]).add({ name: cleanName, score });
   return cleanName;
 }
 
 /** True if `score` would land inside the top `limit` entries — mirrors qualifiesForTop in Leaderboard.kt. */
-async function qualifiesForTop(score, limit = 10) {
-  const top = await fetchTopScores(limit);
+async function qualifiesForTop(score, limit = 10, mode = 'classic') {
+  const top = await fetchTopScores(limit, mode);
   return top.length < limit || score > top[top.length - 1].score;
 }

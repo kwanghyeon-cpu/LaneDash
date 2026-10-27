@@ -8,14 +8,25 @@
 // stay in sync), letterboxing rather than stretching when the window's own ratio differs.
 const appFrame = document.getElementById('app-frame');
 
+// Every screen is landscape except the behind-the-car highway run, which switches the frame to
+// a portrait aspect while it is showing (see showScreen).
+const HIGHWAY_ASPECT = 9 / 16;
+let frameAspect = GAME_ASPECT;
+
+function setFrameAspect(aspect) {
+  if (aspect === frameAspect) return;
+  frameAspect = aspect;
+  resizeAppFrame();
+}
+
 function resizeAppFrame() {
   const availW = window.innerWidth;
   const availH = window.innerHeight;
   let w = availW;
-  let h = w / GAME_ASPECT;
+  let h = w / frameAspect;
   if (h > availH) {
     h = availH;
-    w = h * GAME_ASPECT;
+    w = h * frameAspect;
   }
   w = Math.round(w);
   h = Math.round(h);
@@ -29,12 +40,24 @@ window.addEventListener('resize', resizeAppFrame);
 resizeAppFrame();
 
 const HIGH_SCORE_KEY = 'lane_dash_high_score';
+const HIGHWAY_HIGH_SCORE_KEY = 'lane_dash_highway_high_score';
+const MODE_KEY = 'lane_dash_mode';
 
 const state = {
+  // 'classic' (side view, 5 lanes) or 'highway' (behind the car, portrait). Each mode keeps its
+  // own best score and leaderboard — their scores aren't comparable.
+  mode: localStorage.getItem(MODE_KEY) === 'highway' ? 'highway' : 'classic',
   selectedCityId: CITIES[0].id,
   selectedCarId: CARS[0].id,
   highScore: Number(localStorage.getItem(HIGH_SCORE_KEY) || 0),
+  highwayHighScore: Number(localStorage.getItem(HIGHWAY_HIGH_SCORE_KEY) || 0),
 };
+
+/** Mode of the run in progress / just finished (state.mode can't change mid-run, but the
+ *  leaderboard screen is reachable afterwards, so it keeps its own copy). */
+let runMode = state.mode;
+
+function bestFor(mode) { return mode === 'highway' ? state.highwayHighScore : state.highScore; }
 
 // Bump this whenever an asset file is replaced in place (same filename, new pixels) — the
 // dev server sends no cache-control headers, so browsers otherwise keep serving stale
@@ -49,8 +72,13 @@ function preloadImage(path) {
   images[path] = img;
   return img;
 }
-[...CITIES.map(c => c.sprite), ...CARS.map(c => c.sprite), ...Object.values(OBSTACLE_VARIANTS).map(v => v.sprite)]
-  .forEach(preloadImage);
+[
+  ...CITIES.map(c => c.sprite),
+  ...CARS.map(c => c.sprite),
+  ...CARS.map(c => c.rearSprite),
+  ...Object.values(OBSTACLE_VARIANTS).map(v => v.sprite),
+  ...Object.values(TRAFFIC_KINDS).map(k => k.sprite),
+].forEach(preloadImage);
 
 // Refines the hand-computed hitHalfWidthUnits fallbacks in catalog.js against each
 // sprite's real natural size, once it's actually loaded (see computeObstacleHitHalfWidthUnits
@@ -107,12 +135,19 @@ function recordPlayAndGetToday() {
 }
 
 function showScreen(id) {
+  // The highway run is portrait; everything else (menus, classic run, leaderboard) is landscape.
+  setFrameAspect(id === 'screen-game' && runMode === 'highway' ? HIGHWAY_ASPECT : GAME_ASPECT);
   document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
 
 function reportScore(score) {
-  if (score > state.highScore) {
+  if (runMode === 'highway') {
+    if (score > state.highwayHighScore) {
+      state.highwayHighScore = score;
+      localStorage.setItem(HIGHWAY_HIGH_SCORE_KEY, String(score));
+    }
+  } else if (score > state.highScore) {
     state.highScore = score;
     localStorage.setItem(HIGH_SCORE_KEY, String(score));
   }
@@ -168,6 +203,45 @@ function refreshHomeBest() {
 
 document.getElementById('btn-play').addEventListener('click', () => {
   audio.unlock();
+  buildModeGrid();
+  showScreen('screen-mode');
+});
+
+// ---------- MODE SELECT ----------
+const MODES = [
+  {
+    id: 'classic', name: '클래식', tag: '가로 화면',
+    lines: ['5개 차선을 위·아래로 오가며 장애물을 피해요', '연료, 아이템, 근접 회피 보너스'],
+  },
+  {
+    id: 'highway', name: '하이웨이', tag: '세로 화면 · NEW',
+    lines: ['뒤에서 바라보는 아웃런 스타일', '왼쪽/오른쪽을 눌러 조향하고 커브를 달려요'],
+  },
+];
+
+function buildModeGrid() {
+  const grid = document.getElementById('mode-grid');
+  grid.innerHTML = '';
+  for (const mode of MODES) {
+    const best = bestFor(mode.id);
+    const card = document.createElement('div');
+    card.className = 'pick-card mode-card' + (mode.id === state.mode ? ' selected' : '');
+    card.innerHTML = `
+      <p class="mode-tag">${mode.tag}</p>
+      <p class="mode-name">${mode.name}</p>
+      ${mode.lines.map(line => `<p class="mode-line">${line}</p>`).join('')}
+      <p class="mode-best">${best > 0 ? `BEST ${best}` : ''}</p>
+    `;
+    card.addEventListener('click', () => {
+      state.mode = mode.id;
+      localStorage.setItem(MODE_KEY, mode.id);
+      buildModeGrid();
+    });
+    grid.appendChild(card);
+  }
+}
+
+document.getElementById('btn-mode-next').addEventListener('click', () => {
   showScreen('screen-city');
 });
 
@@ -259,17 +333,31 @@ let lastFrameTime = 0;
 let rafId = null;
 let lastNearMissCount = 0;
 
+const screenGame = document.getElementById('screen-game');
+const isHighway = () => runMode === 'highway';
+
 function startGame() {
+  runMode = state.mode;
+  screenGame.classList.toggle('mode-highway', isHighway());
+  document.querySelector('.controls-hint').textContent = isHighway()
+    ? '화면 왼쪽/오른쪽을 누르거나 ← / → 키로 조향, P 키로 일시정지'
+    : '↑ / ↓ 키로 이동, P 키로 일시정지';
   showScreen('screen-game');
   document.getElementById('gameover-overlay').classList.add('hidden');
   document.getElementById('pause-overlay').classList.add('hidden');
 
-  engine = new GameEngine((event) => {
+  const onSfx = (event) => {
     audio.play(event);
     vibrateFor(event);
-  });
-  engine.start(cityById(state.selectedCityId).traits);
-  animatedLane = engine.laneIndex;
+  };
+  if (isHighway()) {
+    engine = new HighwayEngine(onSfx);
+    engine.start();
+  } else {
+    engine = new GameEngine(onSfx);
+    engine.start(cityById(state.selectedCityId).traits);
+    animatedLane = engine.laneIndex;
+  }
   lastNearMissCount = 0;
   audio.startBgm();
 
@@ -287,13 +375,16 @@ function loop(now) {
     if (!engine.paused) updateFxQuality(dt, engine.elapsedSeconds);
   }
 
-  // Lane tween, similar feel to the app's 160ms animateFloatAsState.
-  const smoothing = 1 - Math.pow(0.001, dt / 0.16);
-  animatedLane += (engine.laneIndex - animatedLane) * smoothing;
-
   const city = cityById(state.selectedCityId);
   const car = carById(state.selectedCarId);
-  drawFrame(ctx, canvas.width, canvas.height, engine, city, car, images, animatedLane);
+  if (isHighway()) {
+    drawHighwayFrame(ctx, canvas.width, canvas.height, engine, city, car, images);
+  } else {
+    // Lane tween, similar feel to the app's 160ms animateFloatAsState.
+    const smoothing = 1 - Math.pow(0.001, dt / 0.16);
+    animatedLane += (engine.laneIndex - animatedLane) * smoothing;
+    drawFrame(ctx, canvas.width, canvas.height, engine, city, car, images, animatedLane);
+  }
   updateHud();
 
   if (engine.status === 'GAME_OVER') {
@@ -318,6 +409,16 @@ function showToast(text) {
 }
 
 function updateHud() {
+  if (isHighway()) {
+    document.getElementById('hud-speed-text').textContent = `${Math.round(engine.speed * 5)} KM/H`;
+    if (engine.nearMissCount > lastNearMissCount) showToast(`NEAR MISS!  +${HW.NEAR_MISS_SCORE}`);
+    lastNearMissCount = engine.nearMissCount;
+    document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
+    document.getElementById('pause-overlay').classList.toggle('hidden', !(engine.status === 'RUNNING' && engine.paused));
+    document.getElementById('hud-score').textContent = `SCORE ${engine.score}`;
+    document.getElementById('hud-best').textContent = `BEST ${bestFor('highway')}`;
+    return;
+  }
   const speedKmh = Math.round(engine.effectiveSpeed * 20);
   document.getElementById('hud-speed-text').textContent = `${speedKmh} KM/H`;
   setPowerupChip('hud-shield', engine.shieldTimeLeft, '방어막');
@@ -327,7 +428,7 @@ function updateHud() {
   document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
   document.getElementById('pause-overlay').classList.toggle('hidden', !(engine.status === 'RUNNING' && engine.paused));
   document.getElementById('hud-score').textContent = `SCORE ${engine.score}`;
-  document.getElementById('hud-best').textContent = `BEST ${state.highScore}`;
+  document.getElementById('hud-best').textContent = `BEST ${bestFor('classic')}`;
   const fuelPct = Math.max(0, Math.min(100, engine.fuel));
   const fuelBar = document.getElementById('fuel-bar');
   fuelBar.style.width = fuelPct + '%';
@@ -348,9 +449,10 @@ function showGameOver() {
     engine.gameOverReason === 'FUEL_EMPTY' ? '연료 소진' : '충돌 발생';
   document.getElementById('gameover-score').textContent = `SCORE ${engine.score}`;
   document.getElementById('gameover-best').textContent =
-    engine.score >= state.highScore ? 'NEW BEST!' : `BEST ${state.highScore}`;
-  document.getElementById('gameover-stats').textContent =
-    `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회 · 연료 ${engine.fuelCollected}개`;
+    engine.score >= bestFor(runMode) ? 'NEW BEST!' : `BEST ${bestFor(runMode)}`;
+  document.getElementById('gameover-stats').textContent = isHighway()
+    ? `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회`
+    : `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회 · 연료 ${engine.fuelCollected}개`;
   document.getElementById('gameover-plays').textContent = `오늘 ${recordPlayAndGetToday()}번째 판`;
   document.getElementById('gameover-top').textContent = '';
 
@@ -366,7 +468,7 @@ function showGameOver() {
   const score = engine.score;
   // Same rule as qualifiesForTop in leaderboard.js, but keeping the list lets us also say
   // how far a non-qualifying run was from the TOP 10 cutoff.
-  fetchTopScores(10)
+  fetchTopScores(10, runMode)
     .then(top => {
       if (score !== lastRunScore) return; // a retry/new run started while this was in flight
       const qualifies = top.length < 10 || score > top[top.length - 1].score;
@@ -382,9 +484,10 @@ function showGameOver() {
 }
 
 document.getElementById('btn-share').addEventListener('click', async () => {
-  const best = Math.max(state.highScore, lastRunScore);
+  const best = Math.max(bestFor(runMode), lastRunScore);
   const city = cityById(state.selectedCityId);
-  const text = `🚗💨 Lane Dash — ${city.name}에서 ${lastRunScore}점! (내 최고 ${best}점)\n` +
+  const modeName = isHighway() ? ' 하이웨이' : '';
+  const text = `🚗💨 Lane Dash${modeName} — ${city.name}에서 ${lastRunScore}점! (내 최고 ${best}점)\n` +
     `웹에서 바로 플레이 → ${WEB_PLAY_URL}\nGoogle Play → ${STORE_URL}`;
   const btn = document.getElementById('btn-share');
   const label = btn.querySelector('.btn-label');
@@ -407,19 +510,19 @@ document.getElementById('btn-submit-score').addEventListener('click', () => {
   const score = lastRunScore;
   submitBtn.disabled = true;
   submitBtn.textContent = '등록 중...';
-  submitScore(name, score)
+  submitScore(name, score, runMode)
     .then(cleanName => { justSubmittedName = cleanName; })
     .catch(e => console.error('submitScore failed', e))
     .finally(() => {
       document.getElementById('gameover-overlay').classList.add('hidden');
-      showLeaderboardScreen(justSubmittedName, score);
+      showLeaderboardScreen(justSubmittedName, score, runMode);
     });
 });
 
 document.getElementById('btn-view-leaderboard').addEventListener('click', () => {
   justSubmittedName = null;
   document.getElementById('gameover-overlay').classList.add('hidden');
-  showLeaderboardScreen(null, lastRunScore);
+  showLeaderboardScreen(null, lastRunScore, runMode);
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => {
@@ -428,7 +531,8 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 });
 
 function restartRun() {
-  engine.start(cityById(state.selectedCityId).traits);
+  if (isHighway()) engine.start();
+  else engine.start(cityById(state.selectedCityId).traits);
   lastNearMissCount = 0;
   lastFrameTime = performance.now();
   if (rafId) cancelAnimationFrame(rafId);
@@ -475,13 +579,21 @@ function goHome() {
 }
 
 // ---------- LEADERBOARD ----------
-function showLeaderboardScreen(highlightName, highlightScore) {
+let leaderboardRequest = 0;
+
+function showLeaderboardScreen(highlightName, highlightScore, mode = runMode) {
   showScreen('screen-leaderboard');
+  document.querySelectorAll('.lb-tab').forEach(tab => {
+    tab.classList.toggle('selected', tab.dataset.mode === mode);
+    tab.onclick = () => showLeaderboardScreen(highlightName, highlightScore, tab.dataset.mode);
+  });
   const list = document.getElementById('leaderboard-list');
   list.innerHTML = '<div class="leaderboard-status">불러오는 중...</div>';
 
-  fetchTopScores(10)
+  const request = ++leaderboardRequest;
+  fetchTopScores(10, mode)
     .then(entries => {
+      if (request !== leaderboardRequest) return; // the player already switched tabs
       if (entries.length === 0) {
         list.innerHTML = '<div class="leaderboard-status">아직 기록이 없어요.\n첫 번째 기록을 남겨보세요!</div>';
         return;
@@ -490,7 +602,8 @@ function showLeaderboardScreen(highlightName, highlightScore) {
       entries.forEach((entry, index) => {
         const rank = index + 1;
         const row = document.createElement('div');
-        const highlighted = highlightName != null && entry.name === highlightName && entry.score === highlightScore;
+        const highlighted = mode === runMode && highlightName != null &&
+          entry.name === highlightName && entry.score === highlightScore;
         row.className = 'leaderboard-row' + (highlighted ? ' highlighted' : '');
         row.innerHTML = `
           <span class="leaderboard-rank${rank <= 3 ? ' rank-' + rank : ''}">#${rank}</span>
@@ -503,6 +616,7 @@ function showLeaderboardScreen(highlightName, highlightScore) {
       });
     })
     .catch(e => {
+      if (request !== leaderboardRequest) return;
       console.error('fetchTopScores failed', e);
       list.innerHTML = '<div class="leaderboard-status">순위표를 불러오지 못했어요.\n네트워크 연결을 확인해주세요.</div>';
     });
@@ -517,15 +631,70 @@ document.getElementById('btn-leaderboard-home').addEventListener('click', () => 
 document.getElementById('btn-lane-up').addEventListener('click', () => engine && engine.moveLaneUp());
 document.getElementById('btn-lane-down').addEventListener('click', () => engine && engine.moveLaneDown());
 
+// Highway steering: hold the left or right half of the screen, or the arrow / A-D keys. A held
+// finger wins over the keyboard, and releasing both goes straight.
+const steer = { pointer: 0, left: false, right: false };
+
+function applySteer() {
+  if (engine && isHighway()) engine.steerInput = steer.pointer || ((steer.right ? 1 : 0) - (steer.left ? 1 : 0));
+}
+
+function pointerSide(e) {
+  const rect = canvas.getBoundingClientRect();
+  return e.clientX - rect.left < rect.width / 2 ? -1 : 1;
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (!isHighway()) return;
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  steer.pointer = pointerSide(e);
+  applySteer();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!isHighway() || steer.pointer === 0) return;
+  steer.pointer = pointerSide(e);
+  applySteer();
+});
+for (const type of ['pointerup', 'pointercancel']) {
+  canvas.addEventListener(type, () => {
+    steer.pointer = 0;
+    applySteer();
+  });
+}
+
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') steer.left = false;
+  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') steer.right = false;
+  else return;
+  applySteer();
+});
+
 window.addEventListener('keydown', (e) => {
   if (!engine || document.getElementById('screen-game').classList.contains('active') === false) return;
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+  if (isHighway()) {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+      e.preventDefault();
+      steer.left = true;
+      applySteer();
+      return;
+    }
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+      e.preventDefault();
+      steer.right = true;
+      applySteer();
+      return;
+    }
+  } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
     e.preventDefault();
     engine.moveLaneUp();
+    return;
   } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
     e.preventDefault();
     engine.moveLaneDown();
-  } else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+    return;
+  }
+  if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
     e.preventDefault();
     if (engine.paused) resumeGame(); else pauseGame();
   }

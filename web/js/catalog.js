@@ -53,10 +53,10 @@ const CITIES = [
 const VEHICLE_WIDTH_PER_METER = 1.47 * 1.1 / 4.4;
 
 const CARS = [
-  { id: 'suv', name: 'SUV', nameEn: 'SUV', sprite: 'assets/cars/car_gen1.png', lengthMeters: 4.4 },
-  { id: 'sports_car', name: '스포츠카', nameEn: 'SPORTS CAR', sprite: 'assets/cars/car_gen2.png', lengthMeters: 4.2 },
-  { id: 'sedan', name: '세단', nameEn: 'SEDAN', sprite: 'assets/cars/car_gen3.png', lengthMeters: 4.4 },
-  { id: 'van', name: '승합차', nameEn: 'VAN', sprite: 'assets/cars/car_gen4.png', lengthMeters: 4.8 },
+  { id: 'suv', name: 'SUV', nameEn: 'SUV', sprite: 'assets/cars/car_gen1.png', rearSprite: 'assets/rear/car_rear_1.png', lengthMeters: 4.4 },
+  { id: 'sports_car', name: '스포츠카', nameEn: 'SPORTS CAR', sprite: 'assets/cars/car_gen2.png', rearSprite: 'assets/rear/car_rear_2.png', lengthMeters: 4.2 },
+  { id: 'sedan', name: '세단', nameEn: 'SEDAN', sprite: 'assets/cars/car_gen3.png', rearSprite: 'assets/rear/car_rear_3.png', lengthMeters: 4.4 },
+  { id: 'van', name: '승합차', nameEn: 'VAN', sprite: 'assets/cars/car_gen4.png', rearSprite: 'assets/rear/car_rear_4.png', lengthMeters: 4.8 },
 ];
 
 // hitWidthScale / heightScale mirror ObstacleVariant in Model.kt (post size-tuning) and
