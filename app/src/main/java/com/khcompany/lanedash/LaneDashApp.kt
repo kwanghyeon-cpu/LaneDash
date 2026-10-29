@@ -70,6 +70,7 @@ fun LaneDashApp(adManager: AdManager, modifier: Modifier = Modifier) {
         composable(Routes.HOME) {
             HomeScreen(
                 highScore = session.highScore,
+                highwayHighScore = session.highwayHighScore,
                 onPlay = { navController.navigate(Routes.MODES) },
             )
         }

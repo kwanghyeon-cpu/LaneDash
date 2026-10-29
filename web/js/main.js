@@ -207,7 +207,11 @@ sfxVolumeInput.addEventListener('input', () => {
 // ---------- HOME ----------
 function refreshHomeBest() {
   const el = document.getElementById('home-best');
-  el.textContent = state.highScore > 0 ? `BEST  ${state.highScore}` : '';
+  // Both modes' bests, one line each (a mode you haven't played yet stays out of the way).
+  el.innerHTML = [
+    state.highScore > 0 ? `클래식 BEST  ${state.highScore}` : '',
+    state.highwayHighScore > 0 ? `하이웨이 BEST  ${state.highwayHighScore}` : '',
+  ].filter(Boolean).join('<br/>');
 }
 
 document.getElementById('btn-play').addEventListener('click', () => {
@@ -221,12 +225,12 @@ const MODES = [
   {
     id: 'classic', name: '클래식', tag: '가로 화면',
     lines: ['5개 차선을 위·아래로 오가며 장애물을 피해요', '연료, 아이템, 근접 회피 보너스'],
-    previewSprites: ['assets/cars/car_gen1.png', 'assets/obstacles/obstacle_truck.png'],
+    previewSprites: ['assets/cars/car_gen1.png'],
   },
   {
     id: 'highway', name: '하이웨이', tag: '세로 화면 · NEW',
     lines: ['차 뒤에서 바라보는 아웃런 스타일', '5차선 도로를 좌우로 조향하며 커브를 달려요'],
-    previewSprites: ['assets/rear/car_rear_1.png', 'assets/rear/traffic_rear_suv.png'],
+    previewSprites: ['assets/rear/car_rear_1.png'],
   },
 ];
 
@@ -248,8 +252,8 @@ function buildModeGrid() {
     const drawThumb = () => {
       const tctx = thumb.getContext('2d');
       tctx.clearRect(0, 0, thumb.width, thumb.height);
-      mode.previewSprites.forEach((path, i) => {
-        drawFittedSprite(tctx, images[path], thumb.width * (i === 0 ? 0.27 : 0.73), thumb.height * 0.5, thumb.width * 0.42, thumb.height * 0.84);
+      mode.previewSprites.forEach((path) => {
+        drawFittedSprite(tctx, images[path], thumb.width * 0.5, thumb.height * 0.5, thumb.width * 0.5, thumb.height * 0.84);
       });
     };
     drawThumb();

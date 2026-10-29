@@ -46,14 +46,25 @@ html, body {
 .screen.active { display: block; }
 
 /* ---------- HOME ---------- */
-#screen-home.active { display: flex; align-items: center; justify-content: center; }
+/* Portrait title: the logo sits in the sky of the road scene, PLAY on the road, the car at the bottom. */
+#screen-home.active { display: block; }
 #screen-home {
-  background-image: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), url('assets/ui/home_background.png');
+  background-image:
+    linear-gradient(rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.10) 32%, rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.10) 78%, rgba(0,0,0,0.25) 100%),
+    url('assets/ui/home_portrait.png?v=2');
   background-size: cover;
-  background-position: center;
+  background-position: center 20%;
 }
-.home-content { text-align: center; padding: 24px; }
+.home-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 11% 24px 46%;
+}
 .title {
+  text-shadow: 0 4px 12px rgba(0,0,0,0.7);
   font-size: 56px;
   font-weight: 900;
   color: var(--primary);
@@ -61,8 +72,9 @@ html, body {
   letter-spacing: 2px;
   margin: 0 0 12px;
 }
-.subtitle { color: var(--on-bg); opacity: 0.85; margin: 0 0 24px; font-size: 16px; }
-.best-text { color: var(--secondary); font-size: 20px; font-weight: bold; margin: 0 0 28px; min-height: 24px; }
+.subtitle { color: var(--on-bg); margin: 0 0 24px; font-size: 16px; padding: 6px 16px; border-radius: 999px; background: rgba(18,11,34,0.62); }
+.best-text { color: var(--secondary); font-size: 18px; font-weight: bold; margin: auto 0 20px; padding: 8px 20px; border-radius: 16px; background: rgba(18,11,34,0.62); line-height: 1.5; }
+.best-text:empty { display: none; }
 
 .btn {
   font-family: inherit;
@@ -390,7 +402,8 @@ html, body {
 #app-frame.portrait .card-grid { grid-template-columns: repeat(2, 1fr); }
 #app-frame.portrait .mode-grid { grid-template-columns: 1fr; height: calc(100% - 150px); }
 #app-frame.portrait .mode-card { min-height: 0; }
-#app-frame.portrait .title { font-size: 56px; }
+#app-frame.portrait .title { font-size: 72px; }
+#app-frame.portrait .btn-big { padding: 18px 0; width: 70%; font-size: 22px; }
 
 /* A peek at the real art on each mode card. */
 .mode-thumb {
