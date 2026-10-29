@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -654,21 +655,21 @@ private fun FuelGauge(fuelFraction: () -> Float, modifier: Modifier = Modifier) 
 }
 
 @Composable
-private fun LaneButton(icon: GameIcon, description: String, onClick: () -> Unit) {
+internal fun LaneButton(icon: GameIcon, description: String, onClick: () -> Unit, size: Dp = 56.dp) {
     Button(
         onClick = onClick,
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
         ),
-        modifier = Modifier.size(56.dp),
+        modifier = Modifier.size(size),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
     ) {
         Icon(
             imageVector = icon.vector,
             contentDescription = description,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(26.dp),
+            modifier = Modifier.size(size * 0.46f),
         )
     }
 }

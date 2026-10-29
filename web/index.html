@@ -6,7 +6,7 @@
 <title>Lane Dash</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css" />
-<link rel="stylesheet" href="style.css?v=14" />
+<link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
 
@@ -76,6 +76,10 @@
       <div class="lane-controls">
         <button id="btn-lane-up" class="lane-btn" aria-label="위 차선"><span data-icon="caretUp"></span></button>
         <button id="btn-lane-down" class="lane-btn" aria-label="아래 차선"><span data-icon="caretDown"></span></button>
+      </div>
+      <div class="hw-controls">
+        <button id="btn-lane-left" class="lane-btn hw-btn" aria-label="왼쪽 차선"><span data-icon="caretLeft"></span></button>
+        <button id="btn-lane-right" class="lane-btn hw-btn" aria-label="오른쪽 차선"><span data-icon="caretRight"></span></button>
       </div>
       <button id="btn-pause" class="lane-btn pause-btn" aria-label="일시정지"><span data-icon="pause"></span></button>
       <p class="controls-hint">↑ / ↓ 키로 이동, P 키로 일시정지</p>
@@ -162,7 +166,7 @@
   </div>
 
   <script src="js/catalog.js?v=13"></script>
-  <script src="js/icons.js?v=1"></script>
+  <script src="js/icons.js?v=2"></script>
   <!-- Same Firebase project as the Android app (lanedash-2cc5d), so scores set here land
        in the same shared "scores" collection / leaderboard. -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -171,8 +175,8 @@
   <script src="js/audio.js?v=7"></script>
   <script src="js/engine.js?v=11"></script>
   <script src="js/render.js?v=15"></script>
-  <script src="js/highway-engine.js?v=3"></script>
-  <script src="js/highway-render.js?v=3"></script>
-  <script src="js/main.js?v=16"></script>
+  <script src="js/highway-engine.js?v=4"></script>
+  <script src="js/highway-render.js?v=4"></script>
+  <script src="js/main.js?v=18"></script>
 </body>
 </html>

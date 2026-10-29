@@ -155,9 +155,9 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   const speedRatio = Math.min(1, Math.max(0, engine.speed / HW.MAX_SPEED));
   const fancy = !fxState.low;
 
-  // Road vibration: grows with speed, and the grass shakes the car much harder. The slight zoom
+  // Road vibration: grows with speed. The slight zoom
   // keeps the shifted frame from showing an empty edge.
-  const amplitude = h * (0.0009 * speedRatio * speedRatio + (engine.offRoad ? 0.0022 : 0));
+  const amplitude = h * 0.0009 * speedRatio * speedRatio;
   const shakeY = (Math.sin(engine.z * 1.7) * 0.6 + Math.sin(engine.z * 4.1) * 0.4) * amplitude;
   ctx.save();
   ctx.translate(w / 2, h / 2 + shakeY);

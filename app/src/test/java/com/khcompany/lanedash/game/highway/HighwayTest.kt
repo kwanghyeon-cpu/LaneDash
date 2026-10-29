@@ -92,14 +92,23 @@ class HighwayEngineTest {
     }
 
     @Test
-    fun theCarLeansIntoTheTurn() {
+    fun startsInTheMiddleLaneOfFive() {
+        assertEquals(5, HW_LANE_CENTERS.size)
+        assertEquals(2, engine.laneIndex)
+        assertEquals(0f, engine.playerX, 0.0001f)
+    }
+
+    @Test
+    fun theCarLeansIntoAMoveThenSettles() {
         assertEquals(0f, engine.steerLean, 0f)
-        engine.steerInput = 1
-        repeat(10) { engine.tick(0.016f) }
-        assertTrue(engine.steerLean > 0.5f)
-        engine.steerInput = -1
-        repeat(30) { engine.tick(0.016f) }
-        assertTrue(engine.steerLean < -0.5f)
+        engine.moveLane(1)
+        engine.tick(0.016f)
+        assertTrue(engine.steerLean > 0.3f)
+        repeat(60) { engine.tick(0.016f) }
+        assertEquals(0f, engine.steerLean, 0.02f)
+        engine.moveLane(-1)
+        engine.tick(0.016f)
+        assertTrue(engine.steerLean < -0.3f)
     }
 
     @Test
@@ -140,21 +149,52 @@ class HighwayEngineTest {
     }
 
     @Test
-    fun aFullSteerCrossesOneLaneFastEnoughToDodge() {
-        engine.steerInput = 1
+    fun aTapGlidesToTheNextLaneFastEnoughToDodge() {
+        engine.moveLane(1)
+        assertEquals(3, engine.laneIndex)
         var seconds = 0f
-        while (engine.playerX < HW_LANE_SPACING && seconds < 2f) {
+        while (engine.playerX < HW_LANE_CENTERS[3] - 0.04f && seconds < 2f) {
             engine.tick(0.016f)
             seconds += 0.016f
         }
-        assertTrue("a lane takes too long: " + seconds + " s", seconds < 0.4f)
+        assertTrue("a lane takes too long: " + seconds + " s", seconds < 0.3f)
+        repeat(60) { engine.tick(0.016f) }
+        assertEquals("settles on the lane center", HW_LANE_CENTERS[3], engine.playerX, 0.02f)
+    }
+
+    @Test
+    fun tapsStackUpToCrossSeveralLanesAndStopAtTheRoadEdges() {
+        engine.moveLane(1)
+        engine.moveLane(1)
+        assertEquals(4, engine.laneIndex)
+        repeat(10) { engine.moveLane(1) }
+        assertEquals(HW_LANE_CENTERS.size - 1, engine.laneIndex)
+        repeat(10) { engine.moveLane(-1) }
+        assertEquals(0, engine.laneIndex)
+    }
+
+    @Test
+    fun movesAreIgnoredWhilePaused() {
+        engine.pause()
+        engine.moveLane(1)
+        assertEquals(2, engine.laneIndex)
+    }
+
+    @Test
+    fun roadBendsPushTheCarButItStaysInItsLane() {
+        var widest = 0f
+        repeat(20 * 60) { // 20 s of road, no traffic
+            engine.traffic.clear()
+            engine.tick(1f / 60f)
+            widest = maxOf(widest, abs(engine.playerX - HW_LANE_CENTERS[engine.laneIndex]))
+        }
+        assertTrue("pushed " + widest + " off the lane center", widest in 0.005f..HW_LANE_SPACING / 2f)
     }
 
     @Test
     fun theTopSpeedClimbsWithTheRun() {
-        repeat(100 * 20) { // 100 s, no obstacles; steer back to the middle so curves don't push the car onto the grass
+        repeat(100 * 20) { // 100 s, no obstacles
             engine.traffic.clear()
-            engine.steerInput = if (engine.playerX > 0.05f) -1 else if (engine.playerX < -0.05f) 1 else 0
             engine.tick(0.05f)
         }
         assertTrue(engine.speed > HighwayEngine.EARLY_TOP_SPEED + 5f)
@@ -181,17 +221,6 @@ class HighwayEngineTest {
         addTraffic(lx = 0.8f, relativeZ = 0f)
         engine.tick(0.016f)
         assertEquals(GameStatus.RUNNING, engine.status)
-    }
-
-    @Test
-    fun steeringMovesTheCarAndTheGrassClampsAndSlowsIt() {
-        engine.steerInput = 1
-        repeat(20) { engine.tick(0.05f) }
-        assertTrue("steered right", engine.playerX > 0.3f)
-        repeat(80) { engine.tick(0.05f) }
-        assertEquals(HighwayEngine.MAX_LATERAL, engine.playerX, 0.001f)
-        assertTrue(engine.offRoad)
-        assertTrue("grass drags the speed down", engine.speed <= HighwayEngine.OFFROAD_SPEED + 0.5f)
     }
 
     @Test

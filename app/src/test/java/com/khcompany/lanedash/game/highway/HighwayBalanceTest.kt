@@ -20,14 +20,15 @@ class HighwayBalanceTest {
     /** A player that looks ahead for the lane with the most time before an impact. */
     private class Bot(
         private val engine: HighwayEngine,
-        /** Seconds between noticing a danger and the steering input reaching the screen. */
+        /** Seconds between noticing a danger and the tap reaching the screen. */
         private val reaction: Float,
         /** Wants at least this much time-to-impact in its lane before it stops worrying. */
         private val safeSeconds: Float,
     ) {
-        private val pending = ArrayDeque<Pair<Float, Float>>() // (applyAtTime, targetLateral)
-        private var target = 0f
+        private val pending = ArrayDeque<Pair<Float, Int>>() // (applyAtTime, targetLane)
+        private var target = HW_LANE_CENTERS.size / 2
         private var nextLook = 0f
+        private var nextTap = 0f
 
         fun act(now: Float) {
             if (now >= nextLook) {
@@ -35,19 +36,18 @@ class HighwayBalanceTest {
                 pending.addLast(now + reaction to chooseTarget())
             }
             while (pending.isNotEmpty() && pending.first().first <= now) target = pending.removeFirst().second
-            val dx = target - engine.playerX
-            engine.steerInput = when {
-                dx > 0.04f -> 1
-                dx < -0.04f -> -1
-                else -> 0
+            // One lane per tap, and a finger can't tap faster than about this.
+            if (target != engine.laneIndex && now >= nextTap) {
+                engine.moveLane(if (target > engine.laneIndex) 1 else -1)
+                nextTap = now + TAP_INTERVAL
             }
         }
 
-        private fun timeToImpact(laneX: Float): Float {
+        private fun timeToImpact(lane: Int): Float {
             var best = 99f
             val playerZ = engine.z + HW_PLAYER_DZ
             for (car in engine.traffic) {
-                if (abs(car.lx - laneX) > HW_LANE_SPACING / 2f) continue
+                if (abs(car.lx - HW_LANE_CENTERS[lane]) > HW_LANE_SPACING / 2f) continue
                 val gap = car.z - playerZ
                 if (gap < -1f) continue
                 val closing = engine.speed - car.speed
@@ -57,11 +57,11 @@ class HighwayBalanceTest {
             return best
         }
 
-        private fun chooseTarget(): Float {
+        private fun chooseTarget(): Int {
             val lanes = HW_LANE_CENTERS.indices
             val here = lanes.minBy { abs(HW_LANE_CENTERS[it] - engine.playerX) }
-            val hereTime = timeToImpact(HW_LANE_CENTERS[here])
-            if (hereTime >= safeSeconds) return HW_LANE_CENTERS[here]
+            val hereTime = timeToImpact(here)
+            if (hereTime >= safeSeconds) return here
 
             var best = here
             var bestScore = hereTime
@@ -69,15 +69,15 @@ class HighwayBalanceTest {
                 if (candidate == here) continue
                 // Every lane on the way (and the destination) must stay clear while crossing it.
                 val clear = (minOf(here, candidate)..maxOf(here, candidate)).all { lane ->
-                    lane == here || timeToImpact(HW_LANE_CENTERS[lane]) > abs(lane - here) * 0.25f + 0.3f
+                    lane == here || timeToImpact(lane) > abs(lane - here) * CROSSING_SECONDS_PER_LANE + 0.3f
                 }
-                val score = timeToImpact(HW_LANE_CENTERS[candidate]) - abs(candidate - here) * 0.2f
+                val score = timeToImpact(candidate) - abs(candidate - here) * 0.2f
                 if (clear && score > bestScore) {
                     best = candidate
                     bestScore = score
                 }
             }
-            return HW_LANE_CENTERS[best]
+            return best
         }
     }
 
@@ -122,5 +122,13 @@ class HighwayBalanceTest {
         assertTrue("a casual player gets a real run (${casual.medianSeconds}s)", casual.medianSeconds in 20f..80f)
         assertTrue("an average player lasts a few minutes at most (${average.medianSeconds}s)", average.medianSeconds in 60f..150f)
         assertTrue("the hard phase still beats a very quick player (${expert.medianSeconds}s)", expert.medianSeconds < 300f)
+    }
+
+    private companion object {
+        /** A finger taps about this often. */
+        const val TAP_INTERVAL = 0.14f
+
+        /** Time one lane change takes to cross (the car glides ~0.15 s per lane). */
+        const val CROSSING_SECONDS_PER_LANE = 0.2f
     }
 }

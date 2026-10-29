@@ -10,6 +10,7 @@ import com.khcompany.lanedash.game.GameOverReason
 import com.khcompany.lanedash.game.GameStatus
 import com.khcompany.lanedash.game.SfxEvent
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.random.Random
 
 /**
@@ -45,7 +46,7 @@ class TrafficCar(
 
 /**
  * Simulation for the behind-the-car mode. Pure and resolution independent, like GameEngine:
- * the UI only reads state and feeds [steerInput] (-1 left, 0 straight, +1 right).
+ * the UI only reads state and calls [moveLane] (one lane per press, like the classic mode).
  */
 class HighwayEngine(
     private val onSfx: (SfxEvent) -> Unit = {},
@@ -62,7 +63,14 @@ class HighwayEngine(
     var z by mutableFloatStateOf(0f)
         private set
 
-    /** Player's lateral position in road half-widths; |x| > 1 means on the grass. */
+    /** Lane the player is heading for (index into [HW_LANE_CENTERS]). */
+    var laneIndex by mutableIntStateOf(HW_LANE_CENTERS.size / 2)
+        private set
+
+    /**
+     * Player's lateral position in road half-widths. It is a spring-damper chasing the target
+     * lane's center, so a lane change has weight (overshoot, lean) and road bends still push it.
+     */
     var playerX by mutableFloatStateOf(0f)
         private set
     var speed by mutableFloatStateOf(START_SPEED)
@@ -76,23 +84,20 @@ class HighwayEngine(
     var heading by mutableFloatStateOf(0f)
         private set
 
-    var steerInput = 0
-
     val traffic = mutableStateListOf<TrafficCar>()
 
     /** Seconds left of the "NEAR MISS" flash after the latest close pass (0 when idle). */
     var nearMissFlash by mutableFloatStateOf(0f)
         private set
 
-    private var steerVelocity = 0f
+    private var lateralVelocity = 0f
 
-    /** Current steering, -1..1 with the same inertia as the car; the UI leans the sprite by it. */
-    val steerLean: Float get() = steerVelocity
+    /** -1..1: how far the car still has to travel to its lane; the UI leans the sprite by it. */
+    val steerLean: Float get() = ((HW_LANE_CENTERS[laneIndex] - playerX) / HW_LANE_SPACING).coerceIn(-1f, 1f)
+
     private var spawnCooldown = 1f
     private var nextId = 0L
     private var bonusScore = 0
-
-    val offRoad: Boolean get() = abs(playerX) > 1f
 
     fun start() {
         traffic.clear()
@@ -100,15 +105,15 @@ class HighwayEngine(
         paused = false
         gameOverReason = null
         z = 0f
-        playerX = 0f
+        laneIndex = HW_LANE_CENTERS.size / 2
+        playerX = HW_LANE_CENTERS[laneIndex]
+        lateralVelocity = 0f
         speed = START_SPEED
         score = 0
         bonusScore = 0
         nearMissFlash = 0f
         elapsedSeconds = 0f
         heading = 0f
-        steerInput = 0
-        steerVelocity = 0f
         spawnCooldown = 1f
     }
 
@@ -120,6 +125,12 @@ class HighwayEngine(
         paused = false
     }
 
+    /** Heads one lane left (-1) or right (+1); the car glides there in a fraction of a second. */
+    fun moveLane(delta: Int) {
+        if (status != GameStatus.RUNNING || paused) return
+        laneIndex = (laneIndex + delta).coerceIn(0, HW_LANE_CENTERS.size - 1)
+    }
+
     fun tick(dtSeconds: Float) {
         if (status != GameStatus.RUNNING || paused) return
         val dt = dtSeconds.coerceAtMost(0.05f)
@@ -129,20 +140,22 @@ class HighwayEngine(
         // Difficulty eases from 0 to 1 over the first RAMP_SECONDS of a run, then stays maxed.
         val difficulty = (elapsedSeconds / RAMP_SECONDS).coerceIn(0f, 1f)
 
-        // Speed: auto-accelerates toward a top speed that creeps up with difficulty; the grass
-        // drags it down.
+        // Speed: auto-accelerates toward a top speed that creeps up with difficulty.
         val topSpeed = EARLY_TOP_SPEED + (MAX_SPEED - EARLY_TOP_SPEED) * difficulty
-        val target = if (offRoad) OFFROAD_SPEED else topSpeed
-        speed = if (speed < target) minOf(target, speed + ACCELERATION * dt) else maxOf(target, speed - DECELERATION * dt)
+        speed = minOf(topSpeed, speed + ACCELERATION * dt)
         z += speed * dt
         heading += curveAt(z) * speed * dt
 
-        // Steering has a little inertia, and bends in the road push the car outward.
-        steerVelocity += (steerInput.toFloat() - steerVelocity) * minOf(1f, dt * 9f)
-        val speedFactor = speed / MAX_SPEED
-        playerX += steerVelocity * STEER_RATE * (0.6f + 0.4f * speedFactor) * dt
-        playerX -= curveAt(z + HW_PLAYER_DZ) * speedFactor * CENTRIFUGAL * dt
-        playerX = playerX.coerceIn(-MAX_LATERAL, MAX_LATERAL)
+        // Chase the target lane with a damped spring (small sub-steps keep it stable), while bends
+        // in the road push the car outward.
+        val laneX = HW_LANE_CENTERS[laneIndex]
+        val steps = ceil(dt / LATERAL_STEP).toInt().coerceAtLeast(1)
+        val h = dt / steps
+        val push = curveAt(z + HW_PLAYER_DZ) * (speed / MAX_SPEED) * CENTRIFUGAL
+        repeat(steps) {
+            lateralVelocity += (LANE_SPRING * (laneX - playerX) - LANE_DAMPING * lateralVelocity) * h
+            playerX += (lateralVelocity - push) * h
+        }
 
         spawnCooldown -= dt
         if (spawnCooldown <= 0f) {
@@ -227,14 +240,16 @@ class HighwayEngine(
         const val EARLY_TOP_SPEED = 22f
         const val MAX_SPEED = 30f
         const val RAMP_SECONDS = 120f
-        const val OFFROAD_SPEED = 10f
         const val ACCELERATION = 1.2f
-        const val DECELERATION = 14f
 
-        /** Lateral speed at full steer, in road half-widths per second (a lane takes ~0.15 s). */
-        const val STEER_RATE = 3.0f
+        /**
+         * The lane-chasing spring: ~22 rad/s with a damping ratio of ~0.7, so a lane takes about
+         * 0.15 s and overshoots a few percent. CENTRIFUGAL scales how hard bends push the car.
+         */
+        const val LANE_SPRING = 480f
+        const val LANE_DAMPING = 31f
+        const val LATERAL_STEP = 1f / 120f
         const val CENTRIFUGAL = 40f
-        const val MAX_LATERAL = 1.25f
 
         /** Player's drawn width and its (slightly smaller) hitbox half-width, in road half-widths. */
         const val PLAYER_DRAW_WIDTH = 0.28f

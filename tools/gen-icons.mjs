@@ -16,6 +16,8 @@ const ICONS = [
   ['PAUSE', 'pause', 'pause-fill'],
   ['CARET_UP', 'caretUp', 'caret-up-fill'],
   ['CARET_DOWN', 'caretDown', 'caret-down-fill'],
+  ['CARET_LEFT', 'caretLeft', 'caret-left-fill'],
+  ['CARET_RIGHT', 'caretRight', 'caret-right-fill'],
   ['GAUGE', 'gauge', 'gauge-fill'],
   ['GAS_PUMP', 'gasPump', 'gas-pump-fill'],
   ['SHARE', 'share', 'share-network-fill'],

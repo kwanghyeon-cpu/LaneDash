@@ -3,8 +3,7 @@ package com.khcompany.lanedash.ui.screens
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,6 +98,9 @@ private const val DASH_FADE_DISTANCE = 9f
 private const val SHAKE_ZOOM = 1.02f
 private const val MAX_LEAN_DEGREES = 4f
 private const val VIGNETTE_MAX_ALPHA = 0.5f
+
+/** The left/right lane buttons are big: they are the main controls, tapped constantly. */
+private val LANE_BUTTON_SIZE = 84.dp
 private val ROAD_GRASS = Color(0xFF2E7D32)
 private val RUMBLE_RED = Color(0xFFC4343A)
 private val RUMBLE_WHITE = Color(0xFFD8D8D8)
@@ -195,7 +197,7 @@ fun HighwayScreen(
                 // slight zoom keeps the shifted frame from showing an empty edge.
                 .graphicsLayer {
                     val speedRatio = (engine.speed / HighwayEngine.MAX_SPEED).coerceIn(0f, 1f)
-                    val amplitude = size.height * (0.0009f * speedRatio * speedRatio + if (engine.offRoad) 0.0022f else 0f)
+                    val amplitude = size.height * 0.0009f * speedRatio * speedRatio
                     scaleX = SHAKE_ZOOM
                     scaleY = SHAKE_ZOOM
                     translationY = (sin(engine.z * 1.7f) * 0.6f + sin(engine.z * 4.1f) * 0.4f) * amplitude
@@ -338,27 +340,43 @@ fun HighwayScreen(
                 },
         )
 
-        // Steering: hold the left or right half of the screen.
+        // A sideways swipe moves one lane that way, like the classic mode's vertical swipe; the
+        // buttons below do the same with a tap.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        engine.steerInput = if (down.position.x < size.width / 2f) -1 else 1
-                        do {
-                            val event = awaitPointerEvent()
-                            val pointer = event.changes.firstOrNull()
-                            if (pointer != null && pointer.pressed) {
-                                engine.steerInput = if (pointer.position.x < size.width / 2f) -1 else 1
+                    var dragAccum = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragAccum = 0f },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dragAccum += dragAmount
+                            when {
+                                dragAccum > 50f -> {
+                                    engine.moveLane(1)
+                                    dragAccum = 0f
+                                }
+                                dragAccum < -50f -> {
+                                    engine.moveLane(-1)
+                                    dragAccum = 0f
+                                }
                             }
-                        } while (event.changes.any { it.pressed })
-                        engine.steerInput = 0
-                    }
+                        },
+                    )
                 },
         )
 
         HighwayHud(engine, highScore, modifier = Modifier.fillMaxSize())
+
+        if (engine.status == GameStatus.RUNNING && !engine.paused) {
+            HighwayControls(
+                onLeft = { engine.moveLane(-1) },
+                onRight = { engine.moveLane(1) },
+                onPause = { engine.pause() },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
 
         if (engine.status == GameStatus.RUNNING && engine.paused) {
             HighwayDialog(title = "일시정지") {
@@ -422,6 +440,23 @@ fun HighwayScreen(
     }
 }
 
+/** Left / right lane buttons (one lane per tap) with a small pause button between them. */
+@Composable
+private fun HighwayControls(onLeft: () -> Unit, onRight: () -> Unit, onPause: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.displayCutout)
+            .padding(horizontal = 24.dp, vertical = 28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        LaneButton(icon = GameIcon.CARET_LEFT, description = "왼쪽 차선", onClick = onLeft, size = LANE_BUTTON_SIZE)
+        LaneButton(icon = GameIcon.PAUSE, description = "일시정지", onClick = onPause)
+        LaneButton(icon = GameIcon.CARET_RIGHT, description = "오른쪽 차선", onClick = onRight, size = LANE_BUTTON_SIZE)
+    }
+}
+
 @Composable
 private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier = Modifier) {
     Box(modifier = modifier.windowInsetsPadding(WindowInsets.displayCutout)) {
@@ -464,12 +499,12 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
         }
         if (engine.status == GameStatus.RUNNING && engine.elapsedSeconds < 4f) {
             Text(
-                text = "화면의 왼쪽/오른쪽을 누르고 있으면 조향해요",
+                text = "버튼을 눌러 한 차선씩 옮겨요",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 48.dp),
+                    .padding(bottom = 140.dp),
             )
         }
     }

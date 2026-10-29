@@ -415,3 +415,19 @@ html, body {
   overflow: hidden;
 }
 .mode-thumb canvas { width: 100%; height: 100%; display: block; }
+
+/* ---------- HIGHWAY LANE BUTTONS (one lane per tap, like the classic mode's up/down) ---------- */
+.hw-controls { display: none; }
+#screen-game.mode-highway .hw-controls {
+  display: flex;
+  position: absolute;
+  left: 16px; right: 16px; bottom: 20px;
+  justify-content: space-between;
+  pointer-events: none;
+}
+#screen-game.mode-highway .hw-btn { width: 76px; height: 76px; pointer-events: auto; }
+#screen-game.mode-highway .hw-btn .ico { width: 36px; height: 36px; }
+/* The pause button sits between the two lane buttons instead of in the corner. */
+#screen-game.mode-highway .pause-btn { left: 50%; transform: translateX(-50%); bottom: 32px; }
+/* The hint sits under the HUD (not on the car) and fades out a few seconds into the run. */
+#screen-game.mode-highway .controls-hint { left: 0; right: 0; top: 140px; bottom: auto; text-align: center; transition: opacity 0.6s; }

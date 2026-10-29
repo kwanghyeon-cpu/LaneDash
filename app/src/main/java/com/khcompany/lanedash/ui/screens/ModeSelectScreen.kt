@@ -66,7 +66,7 @@ fun ModeSelectScreen(
             ModeCard(
                 title = "하이웨이",
                 tag = "세로 화면 · NEW",
-                lines = listOf("차 뒤에서 바라보는 아웃런 스타일", "5차선 도로를 좌우로 조향하며 커브를 달려요"),
+                lines = listOf("차 뒤에서 바라보는 아웃런 스타일", "5차선 도로를 한 차선씩 옮겨 가며 달려요"),
                 previewSprites = listOf("car_rear_1"),
                 selected = selectedMode == GameMode.HIGHWAY,
                 onClick = { onSelect(GameMode.HIGHWAY) },

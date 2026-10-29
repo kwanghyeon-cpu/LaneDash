@@ -115,16 +115,6 @@ test('traffic in another lane is harmless', () => {
   assert.equal(engine.status, 'RUNNING');
 });
 
-test('steering moves the car, and the grass clamps and slows it', () => {
-  engine.steerInput = 1;
-  for (let i = 0; i < 20; i++) engine.tick(0.05);
-  assert.ok(engine.playerX > 0.3, 'steered right');
-  for (let i = 0; i < 80; i++) engine.tick(0.05);
-  assert.equal(engine.playerX, HW.MAX_LATERAL);
-  assert.ok(engine.offRoad);
-  assert.ok(engine.speed <= HW.OFFROAD_SPEED + 0.5, 'grass drags the speed down');
-});
-
 test('pause freezes the simulation', () => {
   engine.tick(0.05);
   const z = engine.z;
@@ -176,14 +166,57 @@ test('a near miss flashes briefly then fades', () => {
   assert.equal(engine.nearMissFlash, 0);
 });
 
-test('the car leans into the turn', () => {
+test('starts in the middle lane of five', () => {
+  assert.equal(HW_LANE_CENTERS.length, 5);
+  assert.equal(engine.laneIndex, 2);
+  assert.ok(Math.abs(engine.playerX) < 1e-4);
+});
+
+test('the car leans into a move, then settles', () => {
   assert.equal(engine.steerLean, 0);
-  engine.steerInput = 1;
-  for (let i = 0; i < 10; i++) engine.tick(0.016);
-  assert.ok(engine.steerLean > 0.5);
-  engine.steerInput = -1;
-  for (let i = 0; i < 30; i++) engine.tick(0.016);
-  assert.ok(engine.steerLean < -0.5);
+  engine.moveLane(1);
+  engine.tick(0.016);
+  assert.ok(engine.steerLean > 0.3);
+  for (let i = 0; i < 60; i++) engine.tick(0.016);
+  assert.ok(Math.abs(engine.steerLean) < 0.02);
+  engine.moveLane(-1);
+  engine.tick(0.016);
+  assert.ok(engine.steerLean < -0.3);
+});
+
+test('a tap glides to the next lane fast enough to dodge, and settles on its center', () => {
+  engine.moveLane(1);
+  assert.equal(engine.laneIndex, 3);
+  let seconds = 0;
+  while (engine.playerX < HW_LANE_CENTERS[3] - 0.04 && seconds < 2) { engine.tick(0.016); seconds += 0.016; }
+  assert.ok(seconds < 0.3, 'a lane takes ' + seconds + 's');
+  for (let i = 0; i < 60; i++) engine.tick(0.016);
+  assert.ok(Math.abs(engine.playerX - HW_LANE_CENTERS[3]) < 0.02);
+});
+
+test('taps stack up to cross several lanes, and stop at the road edges', () => {
+  engine.moveLane(1); engine.moveLane(1);
+  assert.equal(engine.laneIndex, 4);
+  for (let i = 0; i < 10; i++) engine.moveLane(1);
+  assert.equal(engine.laneIndex, HW_LANE_CENTERS.length - 1);
+  for (let i = 0; i < 10; i++) engine.moveLane(-1);
+  assert.equal(engine.laneIndex, 0);
+});
+
+test('moves are ignored while paused', () => {
+  engine.pause();
+  engine.moveLane(1);
+  assert.equal(engine.laneIndex, 2);
+});
+
+test('road bends push the car but it stays in its lane', () => {
+  let widest = 0;
+  for (let i = 0; i < 20 * 60; i++) {
+    engine.traffic.length = 0;
+    engine.tick(1 / 60);
+    widest = Math.max(widest, Math.abs(engine.playerX - HW_LANE_CENTERS[engine.laneIndex]));
+  }
+  assert.ok(widest > 0.005 && widest < HW_LANE_SPACING / 2, 'pushed ' + widest + ' off the lane center');
 });
 
 test('traffic is spawned fairly: never a wall nobody could dodge', () => {
@@ -214,17 +247,9 @@ test('five lanes, and every car fits its lane', () => {
   assert.ok(HW.PLAYER_DRAW_WIDTH < HW_LANE_SPACING, 'a drawn car fits inside a lane');
 });
 
-test('a full steer crosses one lane fast enough to dodge', () => {
-  engine.steerInput = 1;
-  let seconds = 0;
-  while (engine.playerX < HW_LANE_SPACING && seconds < 2) { engine.tick(0.016); seconds += 0.016; }
-  assert.ok(seconds < 0.4, 'a lane takes ' + seconds + 's');
-});
-
 test('the top speed climbs with the run', () => {
-  for (let i = 0; i < 100 * 20; i++) { // 100 s, no obstacles; steer back to the middle so curves don't push the car onto the grass
+  for (let i = 0; i < 100 * 20; i++) { // 100 s, no obstacles
     engine.traffic.length = 0;
-    engine.steerInput = engine.playerX > 0.05 ? -1 : engine.playerX < -0.05 ? 1 : 0;
     engine.tick(0.05);
   }
   assert.ok(engine.speed > HW.EARLY_TOP_SPEED + 5);
@@ -236,13 +261,16 @@ test('the top speed climbs with the run', () => {
 // expert (0.15 s) should usually die before 5 minutes. The bots are steadier than people.
 function makeBot(eng, reaction, safeSeconds = 1.6) {
   const pending = [];
-  let target = 0;
+  let target = HW_LANE_CENTERS.length >> 1;
   let nextLook = 0;
-  const timeToImpact = (laneX) => {
+  let nextTap = 0;
+  const TAP_INTERVAL = 0.14; // a finger can't tap faster than about this
+  const CROSSING_SECONDS_PER_LANE = 0.2;
+  const timeToImpact = (lane) => {
     let best = 99;
     const playerZ = eng.z + HW_PLAYER_DZ;
     for (const car of eng.traffic) {
-      if (Math.abs(car.lx - laneX) > HW_LANE_SPACING / 2) continue;
+      if (Math.abs(car.lx - HW_LANE_CENTERS[lane]) > HW_LANE_SPACING / 2) continue;
       const gap = car.z - playerZ;
       if (gap < -1) continue;
       const closing = eng.speed - car.speed;
@@ -251,22 +279,23 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
     }
     return best;
   };
+  const lanes = HW_LANE_CENTERS.map((_, i) => i);
   const chooseTarget = () => {
-    const here = HW_LANE_CENTERS.map((_, i) => i).reduce((b, i) => (Math.abs(HW_LANE_CENTERS[i] - eng.playerX) < Math.abs(HW_LANE_CENTERS[b] - eng.playerX) ? i : b), 0);
-    const hereTime = timeToImpact(HW_LANE_CENTERS[here]);
-    if (hereTime >= safeSeconds) return HW_LANE_CENTERS[here];
+    const here = lanes.reduce((b, i) => (Math.abs(HW_LANE_CENTERS[i] - eng.playerX) < Math.abs(HW_LANE_CENTERS[b] - eng.playerX) ? i : b), 0);
+    const hereTime = timeToImpact(here);
+    if (hereTime >= safeSeconds) return here;
     let best = here;
     let bestScore = hereTime;
-    for (const candidate of HW_LANE_CENTERS.keys()) {
+    for (const candidate of lanes) {
       if (candidate === here) continue;
       let clear = true;
       for (let lane = Math.min(here, candidate); lane <= Math.max(here, candidate); lane++) {
-        if (lane !== here && !(timeToImpact(HW_LANE_CENTERS[lane]) > Math.abs(lane - here) * 0.25 + 0.3)) clear = false;
+        if (lane !== here && !(timeToImpact(lane) > Math.abs(lane - here) * CROSSING_SECONDS_PER_LANE + 0.3)) clear = false;
       }
-      const score = timeToImpact(HW_LANE_CENTERS[candidate]) - Math.abs(candidate - here) * 0.2;
+      const score = timeToImpact(candidate) - Math.abs(candidate - here) * 0.2;
       if (clear && score > bestScore) { best = candidate; bestScore = score; }
     }
-    return HW_LANE_CENTERS[best];
+    return best;
   };
   return (now) => {
     if (now >= nextLook) {
@@ -274,8 +303,10 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
       pending.push([now + reaction, chooseTarget()]);
     }
     while (pending.length && pending[0][0] <= now) target = pending.shift()[1];
-    const dx = target - eng.playerX;
-    eng.steerInput = dx > 0.04 ? 1 : dx < -0.04 ? -1 : 0;
+    if (target !== eng.laneIndex && now >= nextTap) {
+      eng.moveLane(target > eng.laneIndex ? 1 : -1);
+      nextTap = now + TAP_INTERVAL;
+    }
   };
 }
 

@@ -102,13 +102,12 @@ const HW = {
   EARLY_TOP_SPEED: 22,
   MAX_SPEED: 30,
   RAMP_SECONDS: 120,
-  OFFROAD_SPEED: 10,
   ACCELERATION: 1.2,
-  DECELERATION: 14,
-  /** Lateral speed at full steer, in road half-widths per second (a lane takes ~0.15 s). */
-  STEER_RATE: 3.0,
+  /** The lane-chasing spring: ~22 rad/s, damping ratio ~0.7 — a lane takes ~0.15 s, a few percent overshoot. */
+  LANE_SPRING: 480,
+  LANE_DAMPING: 31,
+  LATERAL_STEP: 1 / 120,
   CENTRIFUGAL: 40,
-  MAX_LATERAL: 1.25,
   /** Player's drawn width and its (slightly smaller) hitbox half-width, in road half-widths. */
   PLAYER_DRAW_WIDTH: 0.28,
   PLAYER_HALF_WIDTH: 0.125,
@@ -156,20 +155,21 @@ class HighwayEngine {
     this.paused = false;
     this.gameOverReason = null;
     this.traffic = [];
-    this.steerInput = 0; // -1 left, 0 straight, +1 right
     this.nextId = 0; // not reset by start(), so ids stay unique across restarts
     this._reset();
   }
 
-  get offRoad() { return Math.abs(this.playerX) > 1; }
-
-  /** Current steering, -1..1 with the same inertia as the car; the renderer leans the sprite by it. */
-  get steerLean() { return this.steerVelocity; }
+  /** -1..1: how far the car still has to travel to its lane; the renderer leans the sprite by it. */
+  get steerLean() {
+    return Math.min(1, Math.max(-1, (HW_LANE_CENTERS[this.laneIndex] - this.playerX) / HW_LANE_SPACING));
+  }
 
   _reset() {
     this.traffic = [];
     this.z = 0; // camera position along the road (world units)
-    this.playerX = 0; // lateral position in road half-widths; |x| > 1 means on the grass
+    this.laneIndex = HW_LANE_CENTERS.length >> 1; // lane the player is heading for
+    this.playerX = HW_LANE_CENTERS[this.laneIndex]; // lateral position in road half-widths (a spring chasing that lane)
+    this.lateralVelocity = 0;
     this.speed = HW.START_SPEED;
     this.score = 0;
     this.bonusScore = 0;
@@ -177,8 +177,6 @@ class HighwayEngine {
     this.nearMissFlash = 0; // seconds left of the "NEAR MISS" flash
     this.elapsedSeconds = 0;
     this.heading = 0; // accumulated road heading; the renderer scrolls the skyline by it
-    this.steerInput = 0;
-    this.steerVelocity = 0;
     this.spawnCooldown = 1;
   }
 
@@ -192,6 +190,12 @@ class HighwayEngine {
   pause() { if (this.status === 'RUNNING') this.paused = true; }
   resume() { this.paused = false; }
 
+  /** Heads one lane left (-1) or right (+1); the car glides there in a fraction of a second. */
+  moveLane(delta) {
+    if (this.status !== 'RUNNING' || this.paused) return;
+    this.laneIndex = Math.min(HW_LANE_CENTERS.length - 1, Math.max(0, this.laneIndex + delta));
+  }
+
   tick(dtSeconds) {
     if (this.status !== 'RUNNING' || this.paused) return;
     const dt = Math.min(dtSeconds, 0.05);
@@ -201,21 +205,22 @@ class HighwayEngine {
     // Difficulty eases from 0 to 1 over the first RAMP_SECONDS of a run, then stays maxed.
     const difficulty = Math.min(1, Math.max(0, this.elapsedSeconds / HW.RAMP_SECONDS));
 
-    // Speed: auto-accelerates toward a top speed that creeps up with difficulty; the grass drags it down.
+    // Speed: auto-accelerates toward a top speed that creeps up with difficulty.
     const topSpeed = HW.EARLY_TOP_SPEED + (HW.MAX_SPEED - HW.EARLY_TOP_SPEED) * difficulty;
-    const target = this.offRoad ? HW.OFFROAD_SPEED : topSpeed;
-    this.speed = this.speed < target
-      ? Math.min(target, this.speed + HW.ACCELERATION * dt)
-      : Math.max(target, this.speed - HW.DECELERATION * dt);
+    this.speed = Math.min(topSpeed, this.speed + HW.ACCELERATION * dt);
     this.z += this.speed * dt;
     this.heading += curveAt(this.z) * this.speed * dt;
 
-    // Steering has a little inertia, and bends in the road push the car outward.
-    this.steerVelocity += (this.steerInput - this.steerVelocity) * Math.min(1, dt * 9);
-    const speedFactor = this.speed / HW.MAX_SPEED;
-    this.playerX += this.steerVelocity * HW.STEER_RATE * (0.6 + 0.4 * speedFactor) * dt;
-    this.playerX -= curveAt(this.z + HW_PLAYER_DZ) * speedFactor * HW.CENTRIFUGAL * dt;
-    this.playerX = Math.min(HW.MAX_LATERAL, Math.max(-HW.MAX_LATERAL, this.playerX));
+    // Chase the target lane with a damped spring (small sub-steps keep it stable), while bends in
+    // the road push the car outward.
+    const laneX = HW_LANE_CENTERS[this.laneIndex];
+    const steps = Math.max(1, Math.ceil(dt / HW.LATERAL_STEP));
+    const h = dt / steps;
+    const push = curveAt(this.z + HW_PLAYER_DZ) * (this.speed / HW.MAX_SPEED) * HW.CENTRIFUGAL;
+    for (let i = 0; i < steps; i++) {
+      this.lateralVelocity += (HW.LANE_SPRING * (laneX - this.playerX) - HW.LANE_DAMPING * this.lateralVelocity) * h;
+      this.playerX += (this.lateralVelocity - push) * h;
+    }
 
     this.spawnCooldown -= dt;
     if (this.spawnCooldown <= 0) {

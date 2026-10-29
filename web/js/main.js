@@ -229,7 +229,7 @@ const MODES = [
   },
   {
     id: 'highway', name: '하이웨이', tag: '세로 화면 · NEW',
-    lines: ['차 뒤에서 바라보는 아웃런 스타일', '5차선 도로를 좌우로 조향하며 커브를 달려요'],
+    lines: ['차 뒤에서 바라보는 아웃런 스타일', '5차선 도로를 한 차선씩 옮겨 가며 달려요'],
     previewSprites: ['assets/rear/car_rear_1.png'],
   },
 ];
@@ -381,8 +381,9 @@ function startGame() {
   runMode = state.mode;
   screenGame.classList.toggle('mode-highway', isHighway());
   document.querySelector('.controls-hint').textContent = isHighway()
-    ? '화면 왼쪽/오른쪽을 누르거나 ← / → 키로 조향, P 키로 일시정지'
+    ? '← / → 키나 버튼으로 한 차선씩 이동, P 키로 일시정지'
     : '↑ / ↓ 키로 이동, P 키로 일시정지';
+  document.querySelector('.controls-hint').style.opacity = '';
   showScreen('screen-game');
   document.getElementById('gameover-overlay').classList.add('hidden');
   document.getElementById('pause-overlay').classList.add('hidden');
@@ -451,6 +452,7 @@ function showToast(text) {
 function updateHud() {
   if (isHighway()) {
     document.getElementById('hud-speed-text').textContent = `${Math.round(engine.speed * 7)} KM/H`;
+    document.querySelector('.controls-hint').style.opacity = engine.elapsedSeconds < 4 ? '1' : '0';
     if (engine.nearMissCount > lastNearMissCount) showToast(`NEAR MISS!  +${HW.NEAR_MISS_SCORE}`);
     lastNearMissCount = engine.nearMissCount;
     document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
@@ -671,58 +673,21 @@ document.getElementById('btn-leaderboard-home').addEventListener('click', () => 
 document.getElementById('btn-lane-up').addEventListener('click', () => engine && engine.moveLaneUp());
 document.getElementById('btn-lane-down').addEventListener('click', () => engine && engine.moveLaneDown());
 
-// Highway steering: hold the left or right half of the screen, or the arrow / A-D keys. A held
-// finger wins over the keyboard, and releasing both goes straight.
-const steer = { pointer: 0, left: false, right: false };
-
-function applySteer() {
-  if (engine && isHighway()) engine.steerInput = steer.pointer || ((steer.right ? 1 : 0) - (steer.left ? 1 : 0));
-}
-
-function pointerSide(e) {
-  const rect = canvas.getBoundingClientRect();
-  return e.clientX - rect.left < rect.width / 2 ? -1 : 1;
-}
-
-canvas.addEventListener('pointerdown', (e) => {
-  if (!isHighway()) return;
-  e.preventDefault();
-  canvas.setPointerCapture(e.pointerId);
-  steer.pointer = pointerSide(e);
-  applySteer();
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (!isHighway() || steer.pointer === 0) return;
-  steer.pointer = pointerSide(e);
-  applySteer();
-});
-for (const type of ['pointerup', 'pointercancel']) {
-  canvas.addEventListener(type, () => {
-    steer.pointer = 0;
-    applySteer();
-  });
-}
-
-window.addEventListener('keyup', (e) => {
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') steer.left = false;
-  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') steer.right = false;
-  else return;
-  applySteer();
-});
+// Highway: the on-screen buttons and the arrow / A-D keys each move one lane per press.
+document.getElementById('btn-lane-left').addEventListener('click', () => engine && isHighway() && engine.moveLane(-1));
+document.getElementById('btn-lane-right').addEventListener('click', () => engine && isHighway() && engine.moveLane(1));
 
 window.addEventListener('keydown', (e) => {
   if (!engine || document.getElementById('screen-game').classList.contains('active') === false) return;
   if (isHighway()) {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
       e.preventDefault();
-      steer.left = true;
-      applySteer();
+      if (!e.repeat) engine.moveLane(-1);
       return;
     }
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
       e.preventDefault();
-      steer.right = true;
-      applySteer();
+      if (!e.repeat) engine.moveLane(1);
       return;
     }
   } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
