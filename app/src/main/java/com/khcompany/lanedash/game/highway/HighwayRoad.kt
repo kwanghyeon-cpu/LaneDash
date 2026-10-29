@@ -10,7 +10,10 @@ import kotlin.math.sin
 // stripe of the repeating road texture the row belongs to. Lateral positions are in
 // "road half-widths" (-1 = left edge, +1 = right edge, 0 = center).
 
-const val HW_LANE_COUNT = 3
+const val HW_LANE_COUNT = 5
+
+/** Width of one lane in road half-widths (the whole road is 2). */
+const val HW_LANE_SPACING = 2f / HW_LANE_COUNT
 
 /** How far ahead (world units) the road is drawn and traffic is spawned. */
 const val HW_DRAW_DISTANCE = 60f
@@ -28,7 +31,7 @@ const val HW_PLAYER_DZ = HW_D0 / HW_PLAYER_T
 const val HW_HORIZON_FRACTION = 0.36f
 
 /** Lateral centers of the traffic lanes (half-widths), left to right. */
-val HW_LANE_CENTERS = floatArrayOf(-2f / 3f, 0f, 2f / 3f)
+val HW_LANE_CENTERS = FloatArray(HW_LANE_COUNT) { -1f + HW_LANE_SPACING * (it + 0.5f) }
 
 /**
  * Road curvature at world distance [z]: smooth S-bends with straight stretches (the envelope

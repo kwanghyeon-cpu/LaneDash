@@ -14,7 +14,8 @@ import kotlin.random.Random
 
 /**
  * Kinds of traffic ahead; wider/taller ones are slower. [halfWidth] is in road half-widths and
- * [heightFactor] (height / width) matches the rear-view sprite named [spriteName].
+ * [heightFactor] (height / width) matches the rear-view sprite named [spriteName]. A lane is
+ * [HW_LANE_SPACING] wide, so these stay well inside one.
  */
 enum class TrafficKind(
     val halfWidth: Float,
@@ -23,10 +24,10 @@ enum class TrafficKind(
     val maxSpeed: Float,
     val spriteName: String,
 ) {
-    SEDAN(0.22f, 0.74f, 7f, 11f, "traffic_rear_sedan"),
-    SUV(0.23f, 0.88f, 6.5f, 10.5f, "traffic_rear_suv"),
-    BUS(0.29f, 1.05f, 5.5f, 8.5f, "traffic_rear_bus"),
-    TRUCK(0.28f, 1.29f, 5f, 8f, "traffic_rear_truck"),
+    SEDAN(0.14f, 0.74f, 7f, 11f, "traffic_rear_sedan"),
+    SUV(0.15f, 0.88f, 6.5f, 10.5f, "traffic_rear_suv"),
+    BUS(0.19f, 1.05f, 5.5f, 8.5f, "traffic_rear_bus"),
+    TRUCK(0.18f, 1.29f, 5f, 8f, "traffic_rear_truck"),
 }
 
 class TrafficCar(
@@ -189,10 +190,10 @@ class HighwayEngine(
     }
 
     /**
-     * Adds one car, or none if no lane can take it fairly. A lane change takes ~half a second, so
-     * two cars in different lanes must pass the player at least that far apart (scaled with the
-     * lane distance) — otherwise random spawns create walls nobody can dodge. The required
-     * separation tightens as [difficulty] rises. Returns whether a car was added.
+     * Adds one car, or none if no lane can take it fairly. Changing lanes takes time, so two cars
+     * in different lanes must pass the player far enough apart for the move between them (scaled
+     * with the lane distance) — otherwise random spawns create walls nobody can dodge. The
+     * required gaps tighten as [difficulty] rises. Returns whether a car was added.
      */
     private fun spawnTraffic(difficulty: Float): Boolean {
         val kind = when (random.nextInt(20)) {
@@ -204,15 +205,13 @@ class HighwayEngine(
         val carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * random.nextFloat()
         val spawnZ = z + HW_DRAW_DISTANCE - 1f
         val passIn = (spawnZ - (z + HW_PLAYER_DZ)) / (speed - carSpeed).coerceAtLeast(MIN_CLOSING_SPEED)
-        val separation = SEPARATION_EASY + (SEPARATION_HARD - SEPARATION_EASY) * difficulty
 
         val lanes = HW_LANE_CENTERS.indices.shuffled(random)
         for (lane in lanes) {
             val fair = traffic.none { other ->
                 if (other.passed) return@none false
                 val otherLane = HW_LANE_CENTERS.indices.minBy { abs(HW_LANE_CENTERS[it] - other.lx) }
-                val needed = separation * (1f + LANE_DISTANCE_WEIGHT * abs(lane - otherLane))
-                abs(secondsUntilPassing(other) - passIn) < needed
+                abs(secondsUntilPassing(other) - passIn) < requiredGapSeconds(abs(lane - otherLane), difficulty)
             }
             if (!fair) continue
             traffic.add(TrafficCar(nextId++, HW_LANE_CENTERS[lane], spawnZ, carSpeed, kind))
@@ -231,31 +230,43 @@ class HighwayEngine(
         const val OFFROAD_SPEED = 10f
         const val ACCELERATION = 1.6f
         const val DECELERATION = 14f
-        const val STEER_RATE = 1.8f
+
+        /** Lateral speed at full steer, in road half-widths per second (a lane takes ~0.15 s). */
+        const val STEER_RATE = 3.0f
         const val CENTRIFUGAL = 40f
         const val MAX_LATERAL = 1.25f
-        const val PLAYER_HALF_WIDTH = 0.20f
+
+        /** Player's drawn width and its (slightly smaller) hitbox half-width, in road half-widths. */
+        const val PLAYER_DRAW_WIDTH = 0.28f
+        const val PLAYER_HALF_WIDTH = 0.125f
         const val COLLISION_DEPTH = 0.45f
         const val REMOVE_BEHIND = 4f
         const val SCORE_PER_UNIT = 1.5f
         const val NEAR_MISS_SCORE = 50
 
         /** Extra lateral distance beyond touching that still counts as a near miss. */
-        const val NEAR_MISS_MARGIN = 0.14f
+        const val NEAR_MISS_MARGIN = 0.10f
         const val NEAR_MISS_FLASH_SECONDS = 0.9f
 
         // Traffic density: seconds between spawn attempts, easy -> hard.
         const val SPAWN_EASY_INTERVAL = 1.4f
-        const val SPAWN_HARD_INTERVAL = 0.6f
+        const val SPAWN_HARD_INTERVAL = 0.45f
         const val SPAWN_RETRY_INTERVAL = 0.08f
 
-        /**
-         * Minimum seconds between two cars passing the player in the same lane, easy -> hard; each
-         * lane of distance between them adds [LANE_DISTANCE_WEIGHT] times that on top.
-         */
-        const val SEPARATION_EASY = 0.6f
-        const val SEPARATION_HARD = 0.32f
-        const val LANE_DISTANCE_WEIGHT = 1.0f
+        /** Minimum seconds between two cars passing the player in the same lane, easy -> hard. */
+        const val SEPARATION_EASY = 0.5f
+        const val SEPARATION_HARD = 0.26f
+
+        /** Extra seconds required per lane of distance between two cars, easy -> hard. */
+        const val LANE_GAP_EASY = 0.3f
+        const val LANE_GAP_HARD = 0.17f
         const val MIN_CLOSING_SPEED = 1f
+
+        /** Seconds two cars [laneDistance] lanes apart must pass the player apart at [difficulty]. */
+        fun requiredGapSeconds(laneDistance: Int, difficulty: Float): Float {
+            val separation = SEPARATION_EASY + (SEPARATION_HARD - SEPARATION_EASY) * difficulty
+            val perLane = LANE_GAP_EASY + (LANE_GAP_HARD - LANE_GAP_EASY) * difficulty
+            return separation + perLane * laneDistance
+        }
     }
 }

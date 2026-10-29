@@ -14,13 +14,13 @@ function loadApi() {
   const src = fs.readFileSync(path.join(jsDir, 'highway-engine.js'), 'utf8');
   const ctx = vm.createContext({ Math, console });
   vm.runInContext(
-    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_HORIZON_FRACTION, curveAt };',
+    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds };',
     ctx,
   );
   return ctx.__api;
 }
 
-const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_HORIZON_FRACTION, curveAt } = loadApi();
+const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds } = loadApi();
 
 /** Small seeded PRNG so every run is reproducible. */
 function mulberry32(seed) {
@@ -154,7 +154,7 @@ test('restart resets the run', () => {
 });
 
 test('passing close to a car earns a near-miss bonus', () => {
-  const car = addTraffic(0.5, 1);
+  const car = addTraffic(0.3, 1); // not touching (0.265), but inside the near-miss margin
   tickUntilPassed(car);
   assert.equal(engine.status, 'RUNNING');
   assert.equal(engine.score, Math.floor(engine.z * HW.SCORE_PER_UNIT) + HW.NEAR_MISS_SCORE);
@@ -170,7 +170,7 @@ test('passing far from a car earns nothing extra', () => {
 });
 
 test('a near miss flashes briefly then fades', () => {
-  tickUntilPassed(addTraffic(0.5, 1));
+  tickUntilPassed(addTraffic(0.3, 1));
   assert.ok(Math.abs(engine.nearMissFlash - HW.NEAR_MISS_FLASH_SECONDS) < 0.05);
   for (let i = 0; i < 70; i++) { engine.traffic.length = 0; engine.tick(0.016); }
   assert.equal(engine.nearMissFlash, 0);
@@ -193,19 +193,32 @@ test('traffic is spawned fairly: never a wall nobody could dodge', () => {
     engine.tick(1 / 60);
     if (engine.status !== 'RUNNING') engine.start();
     const difficulty = Math.min(1, Math.max(0, engine.elapsedSeconds / HW.RAMP_SECONDS));
-    const separation = HW.SEPARATION_EASY + (HW.SEPARATION_HARD - HW.SEPARATION_EASY) * difficulty;
     const passIn = (c) => (c.z - engine.z - HW_PLAYER_DZ) / Math.max(1, engine.speed - c.speed);
     const laneOf = (c) => HW_LANE_CENTERS.reduce((b, v, i) => (Math.abs(v - c.lx) < Math.abs(HW_LANE_CENTERS[b] - c.lx) ? i : b), 0);
     for (const fresh of engine.traffic.filter((c) => !seen.has(c.id))) {
       seen.add(fresh.id);
       for (const other of engine.traffic) {
         if (other === fresh || other.id > fresh.id || other.passed) continue;
-        const needed = separation * (1 + HW.LANE_DISTANCE_WEIGHT * Math.abs(laneOf(fresh) - laneOf(other)));
+        const needed = requiredGapSeconds(Math.abs(laneOf(fresh) - laneOf(other)), difficulty);
         assert.ok(Math.abs(passIn(fresh) - passIn(other)) >= needed - 0.05, `cars ${other.id}/${fresh.id} pass too close together`);
       }
     }
   }
   assert.ok(seen.size > 20);
+});
+
+test('five lanes, and every car fits its lane', () => {
+  assert.equal(HW_LANE_CENTERS.length, 5);
+  const widest = Math.max(...Object.values(TRAFFIC_KINDS).map((k) => k.halfWidth));
+  assert.ok(HW.PLAYER_HALF_WIDTH + widest < HW_LANE_SPACING, 'an adjacent-lane car never touches');
+  assert.ok(HW.PLAYER_DRAW_WIDTH < HW_LANE_SPACING, 'a drawn car fits inside a lane');
+});
+
+test('a full steer crosses one lane fast enough to dodge', () => {
+  engine.steerInput = 1;
+  let seconds = 0;
+  while (engine.playerX < HW_LANE_SPACING && seconds < 2) { engine.tick(0.016); seconds += 0.016; }
+  assert.ok(seconds < 0.4, 'a lane takes ' + seconds + 's');
 });
 
 test('the top speed climbs with the run', () => {
@@ -225,7 +238,7 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
     let best = 99;
     const playerZ = eng.z + HW_PLAYER_DZ;
     for (const car of eng.traffic) {
-      if (Math.abs(car.lx - laneX) > 0.1) continue;
+      if (Math.abs(car.lx - laneX) > HW_LANE_SPACING / 2) continue;
       const gap = car.z - playerZ;
       if (gap < -1) continue;
       const closing = eng.speed - car.speed;
@@ -235,18 +248,18 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
     return best;
   };
   const chooseTarget = () => {
-    const here = [0, 1, 2].reduce((b, i) => (Math.abs(HW_LANE_CENTERS[i] - eng.playerX) < Math.abs(HW_LANE_CENTERS[b] - eng.playerX) ? i : b), 0);
+    const here = HW_LANE_CENTERS.map((_, i) => i).reduce((b, i) => (Math.abs(HW_LANE_CENTERS[i] - eng.playerX) < Math.abs(HW_LANE_CENTERS[b] - eng.playerX) ? i : b), 0);
     const hereTime = timeToImpact(HW_LANE_CENTERS[here]);
     if (hereTime >= safeSeconds) return HW_LANE_CENTERS[here];
     let best = here;
     let bestScore = hereTime;
-    for (const candidate of [0, 1, 2]) {
+    for (const candidate of HW_LANE_CENTERS.keys()) {
       if (candidate === here) continue;
       let clear = true;
       for (let lane = Math.min(here, candidate); lane <= Math.max(here, candidate); lane++) {
-        if (lane !== here && !(timeToImpact(HW_LANE_CENTERS[lane]) > Math.abs(lane - here) * 0.5 + 0.4)) clear = false;
+        if (lane !== here && !(timeToImpact(HW_LANE_CENTERS[lane]) > Math.abs(lane - here) * 0.25 + 0.3)) clear = false;
       }
-      const score = timeToImpact(HW_LANE_CENTERS[candidate]) - Math.abs(candidate - here) * 0.4;
+      const score = timeToImpact(HW_LANE_CENTERS[candidate]) - Math.abs(candidate - here) * 0.2;
       if (clear && score > bestScore) { best = candidate; bestScore = score; }
     }
     return HW_LANE_CENTERS[best];
@@ -258,11 +271,11 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
     }
     while (pending.length && pending[0][0] <= now) target = pending.shift()[1];
     const dx = target - eng.playerX;
-    eng.steerInput = dx > 0.06 ? 1 : dx < -0.06 ? -1 : 0;
+    eng.steerInput = dx > 0.04 ? 1 : dx < -0.04 ? -1 : 0;
   };
 }
 
-function medianSurvival(reaction, runs = 40, cap = 300) {
+function medianSurvival(reaction, runs = 120, cap = 300) {
   const seconds = [];
   for (let seed = 1; seed <= runs; seed++) {
     const eng = new HighwayEngine(() => {}, mulberry32(seed));

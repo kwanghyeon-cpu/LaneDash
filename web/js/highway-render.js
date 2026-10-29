@@ -189,9 +189,10 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     rumblePath.rect(cx + hw, top, rumble, height);
     (odd ? roadDark : roadLight).rect(cx - hw, top, hw * 2, height);
     if (!odd) {
-      const half = hw * 0.025;
-      laneMarks.rect(cx - hw / 3 - half, top, half * 2, height);
-      laneMarks.rect(cx + hw / 3 - half, top, half * 2, height);
+      const half = hw * 0.02;
+      for (let divider = 1; divider < HW_LANE_COUNT; divider++) {
+        laneMarks.rect(cx + (-1 + HW_LANE_SPACING * divider) * hw - half, top, half * 2, height);
+      }
     }
   }
   ctx.fillStyle = mixHex(HW_GRASS_DARK, city.haze, 0.2);
@@ -228,7 +229,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   // The player stays at the screen's horizontal center; the road slides under them.
   const playerY = horizonY + roadH * HW_PLAYER_T;
   const playerIdx = hwStrips.indexForY(playerY, h, rowH);
-  const playerWidth = 0.44 * hwStrips.halfWidth[playerIdx];
+  const playerWidth = HW.PLAYER_DRAW_WIDTH * hwStrips.halfWidth[playerIdx];
   drawHighwayRearSprite(
     ctx, images[car.rearSprite], w / 2, playerY, playerWidth,
     engine.steerLean * HW_MAX_LEAN_DEGREES * Math.PI / 180, '#E63946',

@@ -65,6 +65,8 @@ import com.khcompany.lanedash.game.LeaderboardRepository
 import com.khcompany.lanedash.game.highway.HW_D0
 import com.khcompany.lanedash.game.highway.HW_DRAW_DISTANCE
 import com.khcompany.lanedash.game.highway.HW_HORIZON_FRACTION
+import com.khcompany.lanedash.game.highway.HW_LANE_COUNT
+import com.khcompany.lanedash.game.highway.HW_LANE_SPACING
 import com.khcompany.lanedash.game.highway.HW_PLAYER_T
 import com.khcompany.lanedash.game.highway.HighwayEngine
 import com.khcompany.lanedash.game.highway.RoadStrips
@@ -227,9 +229,11 @@ fun HighwayScreen(
                 rumblePath.addRect(Rect(cx + hw, top, cx + hw + rumble, bottom))
                 (if (odd) roadDark else roadLight).addRect(Rect(cx - hw, top, cx + hw, bottom))
                 if (!odd) {
-                    val half = hw * 0.025f
-                    laneMarks.addRect(Rect(cx - hw / 3f - half, top, cx - hw / 3f + half, bottom))
-                    laneMarks.addRect(Rect(cx + hw / 3f - half, top, cx + hw / 3f + half, bottom))
+                    val half = hw * 0.02f
+                    for (divider in 1 until HW_LANE_COUNT) {
+                        val x = cx + (-1f + HW_LANE_SPACING * divider) * hw
+                        laneMarks.addRect(Rect(x - half, top, x + half, bottom))
+                    }
                 }
             }
             drawPath(darkGrass, grassDark)
@@ -276,7 +280,7 @@ fun HighwayScreen(
             // The player stays at the screen's horizontal center; the road slides under them.
             val playerY = horizonY + roadH * HW_PLAYER_T
             val playerIdx = strips.indexForY(playerY, h, rowH)
-            val playerWidth = 0.44f * strips.halfWidth[playerIdx]
+            val playerWidth = HighwayEngine.PLAYER_DRAW_WIDTH * strips.halfWidth[playerIdx]
             val sprite = playerSprite
             if (sprite != null) {
                 drawRearSprite(

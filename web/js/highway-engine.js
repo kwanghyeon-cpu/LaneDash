@@ -3,7 +3,9 @@
 // sync by hand. Pure logic (no DOM, no clocks): time only advances through tick(dt), and the
 // random source is injectable, so node --test can drive it deterministically.
 
-const HW_LANE_COUNT = 3;
+const HW_LANE_COUNT = 5;
+/** Width of one lane in road half-widths (the whole road is 2). */
+const HW_LANE_SPACING = 2 / HW_LANE_COUNT;
 /** How far ahead (world units) the road is drawn and traffic is spawned. */
 const HW_DRAW_DISTANCE = 60;
 /** Depth, in world units, shown at the bottom screen row. */
@@ -15,7 +17,7 @@ const HW_PLAYER_DZ = HW_D0 / HW_PLAYER_T;
 /** The horizon's height as a fraction of the screen height. */
 const HW_HORIZON_FRACTION = 0.36;
 /** Lateral centers of the traffic lanes (road half-widths), left to right. */
-const HW_LANE_CENTERS = [-2 / 3, 0, 2 / 3];
+const HW_LANE_CENTERS = Array.from({ length: HW_LANE_COUNT }, (_, i) => -1 + HW_LANE_SPACING * (i + 0.5));
 
 /**
  * Road curvature at world distance z: smooth S-bends with straight stretches (the envelope
@@ -88,10 +90,10 @@ class RoadStrips {
  * heightFactor (height / width) matches the rear-view sprite.
  */
 const TRAFFIC_KINDS = {
-  SEDAN: { name: 'SEDAN', halfWidth: 0.22, heightFactor: 0.74, minSpeed: 7, maxSpeed: 11, sprite: 'assets/rear/traffic_rear_sedan.png', color: '#8D99AE' },
-  SUV: { name: 'SUV', halfWidth: 0.23, heightFactor: 0.88, minSpeed: 6.5, maxSpeed: 10.5, sprite: 'assets/rear/traffic_rear_suv.png', color: '#5C6478' },
-  BUS: { name: 'BUS', halfWidth: 0.29, heightFactor: 1.05, minSpeed: 5.5, maxSpeed: 8.5, sprite: 'assets/rear/traffic_rear_bus.png', color: '#A7AFBF' },
-  TRUCK: { name: 'TRUCK', halfWidth: 0.28, heightFactor: 1.29, minSpeed: 5, maxSpeed: 8, sprite: 'assets/rear/traffic_rear_truck.png', color: '#7F8CA8' },
+  SEDAN: { name: 'SEDAN', halfWidth: 0.14, heightFactor: 0.74, minSpeed: 7, maxSpeed: 11, sprite: 'assets/rear/traffic_rear_sedan.png', color: '#8D99AE' },
+  SUV: { name: 'SUV', halfWidth: 0.15, heightFactor: 0.88, minSpeed: 6.5, maxSpeed: 10.5, sprite: 'assets/rear/traffic_rear_suv.png', color: '#5C6478' },
+  BUS: { name: 'BUS', halfWidth: 0.19, heightFactor: 1.05, minSpeed: 5.5, maxSpeed: 8.5, sprite: 'assets/rear/traffic_rear_bus.png', color: '#A7AFBF' },
+  TRUCK: { name: 'TRUCK', halfWidth: 0.18, heightFactor: 1.29, minSpeed: 5, maxSpeed: 8, sprite: 'assets/rear/traffic_rear_truck.png', color: '#7F8CA8' },
 };
 
 const HW = {
@@ -103,28 +105,39 @@ const HW = {
   OFFROAD_SPEED: 10,
   ACCELERATION: 1.6,
   DECELERATION: 14,
-  STEER_RATE: 1.8,
+  /** Lateral speed at full steer, in road half-widths per second (a lane takes ~0.15 s). */
+  STEER_RATE: 3.0,
   CENTRIFUGAL: 40,
   MAX_LATERAL: 1.25,
-  PLAYER_HALF_WIDTH: 0.20,
+  /** Player's drawn width and its (slightly smaller) hitbox half-width, in road half-widths. */
+  PLAYER_DRAW_WIDTH: 0.28,
+  PLAYER_HALF_WIDTH: 0.125,
   COLLISION_DEPTH: 0.45,
   REMOVE_BEHIND: 4,
   SCORE_PER_UNIT: 1.5,
   NEAR_MISS_SCORE: 50,
   /** Extra lateral distance beyond touching that still counts as a near miss. */
-  NEAR_MISS_MARGIN: 0.14,
+  NEAR_MISS_MARGIN: 0.10,
   NEAR_MISS_FLASH_SECONDS: 0.9,
   // Traffic density: seconds between spawn attempts, easy -> hard.
   SPAWN_EASY_INTERVAL: 1.4,
-  SPAWN_HARD_INTERVAL: 0.6,
+  SPAWN_HARD_INTERVAL: 0.45,
   SPAWN_RETRY_INTERVAL: 0.08,
-  // Minimum seconds between two cars passing the player in the same lane, easy -> hard; each lane
-  // of distance between them adds LANE_DISTANCE_WEIGHT times that on top.
-  SEPARATION_EASY: 0.6,
-  SEPARATION_HARD: 0.32,
-  LANE_DISTANCE_WEIGHT: 1,
+  // Minimum seconds between two cars passing the player in the same lane, easy -> hard.
+  SEPARATION_EASY: 0.5,
+  SEPARATION_HARD: 0.26,
+  // Extra seconds required per lane of distance between two cars, easy -> hard.
+  LANE_GAP_EASY: 0.3,
+  LANE_GAP_HARD: 0.17,
   MIN_CLOSING_SPEED: 1,
 };
+
+/** Seconds two cars laneDistance lanes apart must pass the player apart at the given difficulty. */
+function requiredGapSeconds(laneDistance, difficulty) {
+  const separation = HW.SEPARATION_EASY + (HW.SEPARATION_HARD - HW.SEPARATION_EASY) * difficulty;
+  const perLane = HW.LANE_GAP_EASY + (HW.LANE_GAP_HARD - HW.LANE_GAP_EASY) * difficulty;
+  return separation + perLane * laneDistance;
+}
 
 function laneIndexOf(lateral) {
   let best = 0;
@@ -259,9 +272,8 @@ class HighwayEngine {
     const carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * this.random();
     const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
     const passIn = (spawnZ - (this.z + HW_PLAYER_DZ)) / Math.max(HW.MIN_CLOSING_SPEED, this.speed - carSpeed);
-    const separation = HW.SEPARATION_EASY + (HW.SEPARATION_HARD - HW.SEPARATION_EASY) * difficulty;
 
-    const lanes = [0, 1, 2];
+    const lanes = HW_LANE_CENTERS.map((_, i) => i);
     for (let i = lanes.length - 1; i > 0; i--) { // Fisher-Yates
       const j = Math.floor(this.random() * (i + 1));
       [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
@@ -269,8 +281,7 @@ class HighwayEngine {
     for (const lane of lanes) {
       const fair = !this.traffic.some((other) => {
         if (other.passed) return false;
-        const needed = separation * (1 + HW.LANE_DISTANCE_WEIGHT * Math.abs(lane - laneIndexOf(other.lx)));
-        return Math.abs(this._secondsUntilPassing(other) - passIn) < needed;
+        return Math.abs(this._secondsUntilPassing(other) - passIn) < requiredGapSeconds(Math.abs(lane - laneIndexOf(other.lx)), difficulty);
       });
       if (!fair) continue;
       this.traffic.push({ id: this.nextId++, lx: HW_LANE_CENTERS[lane], z: spawnZ, speed: carSpeed, kind, passed: false });

@@ -37,8 +37,8 @@ class HighwayBalanceTest {
             while (pending.isNotEmpty() && pending.first().first <= now) target = pending.removeFirst().second
             val dx = target - engine.playerX
             engine.steerInput = when {
-                dx > 0.06f -> 1
-                dx < -0.06f -> -1
+                dx > 0.04f -> 1
+                dx < -0.04f -> -1
                 else -> 0
             }
         }
@@ -47,7 +47,7 @@ class HighwayBalanceTest {
             var best = 99f
             val playerZ = engine.z + HW_PLAYER_DZ
             for (car in engine.traffic) {
-                if (abs(car.lx - laneX) > 0.1f) continue
+                if (abs(car.lx - laneX) > HW_LANE_SPACING / 2f) continue
                 val gap = car.z - playerZ
                 if (gap < -1f) continue
                 val closing = engine.speed - car.speed
@@ -69,9 +69,9 @@ class HighwayBalanceTest {
                 if (candidate == here) continue
                 // Every lane on the way (and the destination) must stay clear while crossing it.
                 val clear = (minOf(here, candidate)..maxOf(here, candidate)).all { lane ->
-                    lane == here || timeToImpact(HW_LANE_CENTERS[lane]) > abs(lane - here) * 0.5f + 0.4f
+                    lane == here || timeToImpact(HW_LANE_CENTERS[lane]) > abs(lane - here) * 0.25f + 0.3f
                 }
-                val score = timeToImpact(HW_LANE_CENTERS[candidate]) - abs(candidate - here) * 0.4f
+                val score = timeToImpact(HW_LANE_CENTERS[candidate]) - abs(candidate - here) * 0.2f
                 if (clear && score > bestScore) {
                     best = candidate
                     bestScore = score

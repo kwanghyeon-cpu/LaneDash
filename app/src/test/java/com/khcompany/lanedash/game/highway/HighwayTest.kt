@@ -75,7 +75,7 @@ class HighwayEngineTest {
 
     @Test
     fun passingCloseToACarEarnsANearMissBonus() {
-        addTraffic(lx = 0.5f, relativeZ = 1f)
+        addTraffic(lx = 0.3f, relativeZ = 1f) // not touching (0.265), but inside the near-miss margin
         val car = engine.traffic.last()
         tickUntilPassed(car)
         assertEquals(GameStatus.RUNNING, engine.status)
@@ -84,7 +84,7 @@ class HighwayEngineTest {
 
     @Test
     fun aNearMissFlashesBrieflyThenFades() {
-        addTraffic(lx = 0.5f, relativeZ = 1f)
+        addTraffic(lx = 0.3f, relativeZ = 1f)
         tickUntilPassed(engine.traffic.last())
         assertEquals(HighwayEngine.NEAR_MISS_FLASH_SECONDS, engine.nearMissFlash, 0.05f)
         repeat(70) { engine.traffic.clear(); engine.tick(0.016f) } // ~1.1 s
@@ -118,19 +118,36 @@ class HighwayEngineTest {
             engine.tick(1f / 60f)
             if (engine.status != GameStatus.RUNNING) engine.start()
             val difficulty = (engine.elapsedSeconds / HighwayEngine.RAMP_SECONDS).coerceIn(0f, 1f)
-            val separation = HighwayEngine.SEPARATION_EASY +
-                (HighwayEngine.SEPARATION_HARD - HighwayEngine.SEPARATION_EASY) * difficulty
             fun passIn(car: TrafficCar) = (car.z - engine.z - HW_PLAYER_DZ) / (engine.speed - car.speed).coerceAtLeast(1f)
             fun laneOf(car: TrafficCar) = HW_LANE_CENTERS.indices.minBy { abs(HW_LANE_CENTERS[it] - car.lx) }
             for (fresh in engine.traffic.filter { seen.add(it.id) }) {
                 for (other in engine.traffic) {
                     if (other === fresh || other.id > fresh.id || other.passed) continue
-                    val needed = separation * (1f + HighwayEngine.LANE_DISTANCE_WEIGHT * abs(laneOf(fresh) - laneOf(other)))
+                    val needed = HighwayEngine.requiredGapSeconds(abs(laneOf(fresh) - laneOf(other)), difficulty)
                     assertTrue("cars ${other.id}/${fresh.id} pass too close together", abs(passIn(fresh) - passIn(other)) >= needed - 0.05f)
                 }
             }
         }
         assertTrue(seen.size > 20)
+    }
+
+    @Test
+    fun fiveLanesAndEveryCarFitsItsLane() {
+        assertEquals(5, HW_LANE_CENTERS.size)
+        val widest = TrafficKind.entries.maxOf { it.halfWidth }
+        assertTrue("an adjacent-lane car never touches", HighwayEngine.PLAYER_HALF_WIDTH + widest < HW_LANE_SPACING)
+        assertTrue("a drawn car fits inside a lane", HighwayEngine.PLAYER_DRAW_WIDTH < HW_LANE_SPACING)
+    }
+
+    @Test
+    fun aFullSteerCrossesOneLaneFastEnoughToDodge() {
+        engine.steerInput = 1
+        var seconds = 0f
+        while (engine.playerX < HW_LANE_SPACING && seconds < 2f) {
+            engine.tick(0.016f)
+            seconds += 0.016f
+        }
+        assertTrue("a lane takes too long: " + seconds + " s", seconds < 0.4f)
     }
 
     @Test
