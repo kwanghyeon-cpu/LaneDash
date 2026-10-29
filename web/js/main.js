@@ -8,8 +8,8 @@
 // stay in sync), letterboxing rather than stretching when the window's own ratio differs.
 const appFrame = document.getElementById('app-frame');
 
-// Every screen is landscape except the behind-the-car highway run, which switches the frame to
-// a portrait aspect while it is showing (see showScreen).
+// The title and the mode picker are portrait; every screen after them follows the chosen mode
+// (classic is landscape, highway is portrait) — the frame switches aspect in showScreen.
 const HIGHWAY_ASPECT = 9 / 16;
 let frameAspect = GAME_ASPECT;
 
@@ -134,9 +134,18 @@ function recordPlayAndGetToday() {
   return count;
 }
 
+/** Whether a screen is shown in the portrait frame: the title and mode picker always are; the
+ *  pickers, the run and the leaderboard follow the mode (the leaderboard is reached from a run). */
+function isPortraitScreen(id) {
+  if (id === 'screen-home' || id === 'screen-mode') return true;
+  if (id === 'screen-city' || id === 'screen-car') return state.mode === 'highway';
+  return runMode === 'highway'; // screen-game, screen-leaderboard
+}
+
 function showScreen(id) {
-  // The highway run is portrait; everything else (menus, classic run, leaderboard) is landscape.
-  setFrameAspect(id === 'screen-game' && runMode === 'highway' ? HIGHWAY_ASPECT : GAME_ASPECT);
+  const portrait = isPortraitScreen(id);
+  setFrameAspect(portrait ? HIGHWAY_ASPECT : GAME_ASPECT);
+  appFrame.classList.toggle('portrait', portrait);
   document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
@@ -212,10 +221,12 @@ const MODES = [
   {
     id: 'classic', name: '클래식', tag: '가로 화면',
     lines: ['5개 차선을 위·아래로 오가며 장애물을 피해요', '연료, 아이템, 근접 회피 보너스'],
+    previewSprites: ['assets/cars/car_gen1.png', 'assets/obstacles/obstacle_truck.png'],
   },
   {
     id: 'highway', name: '하이웨이', tag: '세로 화면 · NEW',
-    lines: ['뒤에서 바라보는 아웃런 스타일', '왼쪽/오른쪽을 눌러 조향하고 커브를 달려요'],
+    lines: ['차 뒤에서 바라보는 아웃런 스타일', '5차선 도로를 좌우로 조향하며 커브를 달려요'],
+    previewSprites: ['assets/rear/car_rear_1.png', 'assets/rear/traffic_rear_suv.png'],
   },
 ];
 
@@ -230,8 +241,19 @@ function buildModeGrid() {
       <p class="mode-tag">${mode.tag}</p>
       <p class="mode-name">${mode.name}</p>
       ${mode.lines.map(line => `<p class="mode-line">${line}</p>`).join('')}
+      <div class="mode-thumb"><canvas width="360" height="150"></canvas></div>
       <p class="mode-best">${best > 0 ? `BEST ${best}` : ''}</p>
     `;
+    const thumb = card.querySelector('canvas');
+    const drawThumb = () => {
+      const tctx = thumb.getContext('2d');
+      tctx.clearRect(0, 0, thumb.width, thumb.height);
+      mode.previewSprites.forEach((path, i) => {
+        drawFittedSprite(tctx, images[path], thumb.width * (i === 0 ? 0.27 : 0.73), thumb.height * 0.5, thumb.width * 0.42, thumb.height * 0.84);
+      });
+    };
+    drawThumb();
+    for (const path of mode.previewSprites) images[path].addEventListener('load', drawThumb, { once: true });
     card.addEventListener('click', () => {
       state.mode = mode.id;
       localStorage.setItem(MODE_KEY, mode.id);

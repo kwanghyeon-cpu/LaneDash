@@ -40,15 +40,25 @@ fun LaneDashApp(adManager: AdManager, modifier: Modifier = Modifier) {
     val navController: NavHostController = rememberNavController()
     val session: GameSessionViewModel = viewModel()
 
-    // Every screen is built for landscape except the behind-the-car mode, which is portrait.
-    // The manifest starts the app landscape; this flips it per route (MainActivity handles the
-    // orientation config change itself, so nothing is recreated and no state is lost).
+    // The title and the mode picker are portrait; everything after them follows the chosen mode
+    // (classic is landscape, highway is portrait). The manifest starts the app in portrait and
+    // this flips it per route (MainActivity handles the orientation config change itself, so
+    // nothing is recreated and no state is lost).
     val activity = LocalContext.current as? Activity
     val route by navController.currentBackStackEntryAsState()
     val currentRoute = route?.destination?.route
-    LaunchedEffect(currentRoute) {
+    val portrait = when (currentRoute) {
+        Routes.HOME, Routes.MODES -> true
+        Routes.CITIES, Routes.CARS -> session.selectedMode == GameMode.HIGHWAY
+        Routes.HIGHWAY -> true
+        Routes.GAME -> false
+        // The leaderboard is reached from a finished run, so it stays in that run's orientation.
+        Routes.LEADERBOARD -> session.lastRunMode == GameMode.HIGHWAY
+        else -> true
+    }
+    LaunchedEffect(currentRoute, portrait) {
         if (currentRoute != null) {
-            activity?.requestedOrientation = if (currentRoute == Routes.HIGHWAY) {
+            activity?.requestedOrientation = if (portrait) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             } else {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE

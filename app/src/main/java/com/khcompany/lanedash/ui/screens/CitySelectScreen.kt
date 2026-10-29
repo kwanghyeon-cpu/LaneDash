@@ -1,5 +1,6 @@
 package com.khcompany.lanedash.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,8 @@ fun CitySelectScreen(
     onSelect: (String) -> Unit,
     onNext: () -> Unit,
 ) {
+    // The pickers follow the chosen mode's orientation (see LaneDashApp): two columns when tall.
+    val portrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -52,7 +56,7 @@ fun CitySelectScreen(
             modifier = Modifier.padding(bottom = 10.dp),
         )
         LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+            columns = GridCells.Fixed(if (portrait) 2 else 4),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.weight(1f),
