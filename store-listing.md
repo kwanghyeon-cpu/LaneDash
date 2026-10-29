@@ -45,22 +45,26 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 ## 릴리스 노트 — 2.0.0 (versionCode 13)
 
-한국어 (500자 이내):
-새로운 게임 모드 "하이웨이"가 추가됐어요!
-- 세로 화면, 차 뒤에서 바라보는 아웃런 스타일 레이싱
-- 5차선 도로를 좌우로 조향하며 커브를 달려요
-- 달릴수록 빨라지고 교통량이 늘어나요. 아슬아슬하게 지나가면 NEAR MISS 보너스!
-- 속도감 연출: 도로변 가로등, 속도선, 화면 진동, 차체 기울임
-- 클래식/하이웨이 모드별 TOP 10 순위표
-- 클래식 모드의 차선 이동에 묵직한 반동 모션을 더했어요
-- 모드 선택 화면 추가
+Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 207자, 영어 363자).
 
-English (500 chars max):
-New game mode: "Highway"!
-- Portrait, behind-the-car OutRun-style racing
-- Steer across a 5-lane road and take the curves
-- It gets faster and busier the longer you survive; close passes earn NEAR MISS bonuses
-- Speed effects: roadside lamps, speed lines, road shake, car lean
-- Separate TOP 10 leaderboards for Classic and Highway
-- Classic lane changes now have a springy, weighty motion
-- New mode selection screen
+<ko-KR>
+새 게임 모드 "하이웨이"가 추가됐어요! 🏎️
+• 세로 화면, 차 뒤에서 바라보는 아웃런 스타일 레이싱
+• 5차선 도로를 좌우로 달리며 커브를 돌파하세요
+• 달릴수록 점점 빨라지고 차가 많아져요
+• 아슬아슬하게 지나가면 NEAR MISS 보너스!
+• 클래식/하이웨이 모드별 TOP 10 순위표
+• 클래식 모드 차선 이동에 묵직한 반동 모션 추가
+• 모드 선택 화면 추가
+</ko-KR>
+
+<en-US>
+New game mode: "Highway"! 🏎️
+• Portrait, behind-the-car OutRun-style racing
+• Weave through a 5-lane road and take the curves
+• It gets faster and busier the longer you survive
+• Pass close to traffic for NEAR MISS bonuses!
+• Separate TOP 10 leaderboards for Classic and Highway
+• Classic lane changes now have a springy, weighty feel
+• New mode selection screen
+</en-US>
