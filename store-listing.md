@@ -17,6 +17,10 @@ Lane Dash
 4개의 도시, 4가지 코스
 서울은 균형 잡힌 기본 코스, 도쿄는 속도가 15% 빠르고, 뉴욕은 교통량이 25% 많고, 파리는 연료가 30% 더 빨리 닳습니다. 어려운 도시일수록 점수 보너스가 있어요.
 
+두 가지 모드
+- 클래식: 가로 화면에서 5개 차선을 위아래로 오가며 장애물을 피합니다.
+- 하이웨이 (NEW): 세로 화면, 차 뒤에서 바라보는 아웃런 스타일! 좌우로 조향하며 커브를 달리고, 속도가 오를수록 점점 빽빽해지는 5차선 도로를 질주하세요. 모드마다 순위표가 따로 있어요.
+
 나만의 차량
 SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요.
 
@@ -36,3 +40,25 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 광고 보고 한 번 더 도전
 아깝게 충돌했다면 광고를 보고 그 자리에서 이어서 도전할 수 있어요.
+
+---
+
+## 릴리스 노트 — 1.1.0 (versionCode 12)
+
+한국어 (500자 이내):
+새로운 게임 모드 "하이웨이"가 추가됐어요!
+- 세로 화면, 차 뒤에서 바라보는 아웃런 스타일 레이싱
+- 5차선 도로를 좌우로 조향하며 커브를 달려요
+- 달릴수록 빨라지고 교통량이 늘어나요. 아슬아슬하게 지나가면 NEAR MISS 보너스!
+- 클래식/하이웨이 모드별 TOP 10 순위표
+- 클래식 모드의 차선 이동에도 묵직한 반동 모션을 더했어요
+- 모드 선택 화면 추가
+
+English (500 chars max):
+New game mode: "Highway"!
+- Portrait, behind-the-car OutRun-style racing
+- Steer across a 5-lane road and take the curves
+- It gets faster and busier the longer you survive; close passes earn NEAR MISS bonuses
+- Separate TOP 10 leaderboards for Classic and Highway
+- Classic lane changes now have a springy, weighty motion
+- New mode selection screen
