@@ -3,6 +3,9 @@
 const SKY_FRACTION = 0.4;
 const OBSTACLE_SCALE = 4.5;
 
+/** How far (world units) the car body slides back at the peak of a lane change. */
+const LANE_SLIP_UNITS = 0.25;
+
 // Pickups (fuel cans) stay forgiving — a wide grab radius on a beneficial item is good
 // game feel. Obstacles get a slight shrink so grazes favor the player instead of feeling
 // cheap, without being so generous it stops feeling like it's actually the car crashing.
@@ -300,7 +303,10 @@ function drawSpeedStreaks(ctx, w, horizonY, roadHeight, pxPerUnit, distance, spe
  * Draws one full game frame. `images` maps sprite path -> HTMLImageElement.
  * `animatedLane` is the (possibly mid-tween) lane the player car is drawn at.
  */
-function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, animatedLane) {
+function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, laneGlide) {
+  // The perspective maths only knows real lanes, so placement uses the clamped value; the tilt and
+  // slip use the raw one so the spring's overshoot swings the nose back.
+  const animatedLane = Math.min(LANE_COUNT - 1, Math.max(0, laneGlide));
   const horizonY = canvasHeight * SKY_FRACTION;
   const roadHeight = canvasHeight - horizonY;
   const pxPerUnit = canvasWidth / WORLD_WIDTH_UNITS;
@@ -357,13 +363,15 @@ function drawFrame(ctx, canvasWidth, canvasHeight, engine, city, car, images, an
   const drawables = [{
     lane: animatedLane,
     draw: () => {
-      const carX = CAR_X_UNITS * pxPerUnit;
+      // Mid-change the body slides back a little (the car's weight lagging the turn).
+      const slip = Math.min(1, Math.abs(engine.laneIndex - laneGlide)) * pxPerUnit * LANE_SLIP_UNITS;
+      const carX = CAR_X_UNITS * pxPerUnit - slip;
       const carBottom = playerCarY + playerCarHeight / 2;
       const carImg = images[car.sprite];
       const fs = fittedSize(carImg, playerCarWidth, playerCarHeight);
       drawGroundShadow(ctx, carX, carBottom, fs.w, fs.h);
       // The nose leans toward the direction of a lane change, pivoting on the wheels.
-      const tilt = Math.max(-0.12, Math.min(0.12, (engine.laneIndex - animatedLane) * 0.09));
+      const tilt = Math.max(-0.12, Math.min(0.12, (engine.laneIndex - laneGlide) * 0.09));
       ctx.save();
       ctx.translate(carX, carBottom);
       ctx.rotate(tilt);

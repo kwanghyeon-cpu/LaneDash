@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -101,6 +101,7 @@ import com.khcompany.lanedash.ui.components.drawShieldBubble
 import com.khcompany.lanedash.ui.components.drawShieldItem
 import com.khcompany.lanedash.ui.components.SpriteCache
 import com.khcompany.lanedash.ui.components.perspectiveY
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -152,6 +153,9 @@ private const val MAX_SPEED_FOR_FX = 16f
 
 /** Extra size bump applied to every obstacle/rival-vehicle sprite (1.5x, then 2x, then another 1.5x). */
 private const val OBSTACLE_SCALE = 4.5f
+
+/** How far (world units) the car body slides back at the peak of a lane change. */
+private const val LANE_SLIP_UNITS = 0.25f
 
 @Composable
 fun GameScreen(
@@ -246,11 +250,16 @@ fun GameScreen(
         }
     }
 
-    val animatedLane by animateFloatAsState(
+    // The lane glide is a lightly damped spring rather than a fixed-time tween: the car overshoots
+    // a touch and settles, so a lane change has weight and inertia (like the highway steering).
+    val laneGlide by animateFloatAsState(
         targetValue = engine.laneIndex.toFloat(),
-        animationSpec = tween(160),
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 650f),
         label = "lane",
     )
+    // The perspective maths only knows real lanes, so placement uses the clamped value; the tilt
+    // and slip below use the raw one so the overshoot swings the nose back.
+    val animatedLane = laneGlide.coerceIn(0f, (LANE_COUNT - 1).toFloat())
 
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(
@@ -362,7 +371,9 @@ fun GameScreen(
             val drawables = mutableListOf<Pair<Float, () -> Unit>>()
             drawables.add(
                 animatedLane to {
-                    val carCenter = Offset(CAR_X_UNITS * pxPerUnit, playerCarY)
+                    // Mid-change the body slides back a little (the car's weight lagging the turn).
+                    val slip = abs(engine.laneIndex - laneGlide).coerceAtMost(1f) * pxPerUnit * LANE_SLIP_UNITS
+                    val carCenter = Offset(CAR_X_UNITS * pxPerUnit - slip, playerCarY)
                     val carBottom = playerCarY + playerCarHeight / 2f
                     // Center of the car's visible body (the sprite sits on the bottom of its box).
                     val bodyCenter = Offset(carCenter.x, carBottom - playerSpriteHeight / 2f)
@@ -373,7 +384,7 @@ fun GameScreen(
                         height = playerSpriteHeight,
                     )
                     // The nose leans toward the direction of a lane change, pivoting on the wheels.
-                    val tilt = ((engine.laneIndex - animatedLane) * 5.2f).coerceIn(-6.9f, 6.9f)
+                    val tilt = ((engine.laneIndex - laneGlide) * 5.2f).coerceIn(-6.9f, 6.9f)
                     withTransform({ rotate(tilt, pivot = Offset(carCenter.x, carBottom)) }) {
                         drawRetroCar(
                             car = car,

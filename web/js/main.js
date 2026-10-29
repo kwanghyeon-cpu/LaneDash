@@ -328,7 +328,22 @@ document.getElementById('btn-car-start').addEventListener('click', () => {
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 let engine = null;
+// Raw lane position of the player's car. It follows engine.laneIndex through a lightly damped
+// spring (see stepLaneGlide), so a lane change overshoots a touch and settles; drawFrame clamps it
+// for placement and uses the raw value for the tilt and slip. Mirrors laneGlide in GameScreen.kt.
 let animatedLane = Math.floor(LANE_COUNT / 2);
+let laneVelocity = 0;
+const LANE_SPRING_STIFFNESS = 650;
+const LANE_SPRING_DAMPING = 2 * 0.6 * Math.sqrt(LANE_SPRING_STIFFNESS); // damping ratio 0.6
+
+function stepLaneGlide(target, dt) {
+  const steps = Math.max(1, Math.ceil(dt / (1 / 240))); // small sub-steps keep the spring stable
+  const h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    laneVelocity += (LANE_SPRING_STIFFNESS * (target - animatedLane) - LANE_SPRING_DAMPING * laneVelocity) * h;
+    animatedLane += laneVelocity * h;
+  }
+}
 let lastFrameTime = 0;
 let rafId = null;
 let lastNearMissCount = 0;
@@ -357,6 +372,7 @@ function startGame() {
     engine = new GameEngine(onSfx);
     engine.start(cityById(state.selectedCityId).traits);
     animatedLane = engine.laneIndex;
+    laneVelocity = 0;
   }
   lastNearMissCount = 0;
   audio.startBgm();
@@ -380,9 +396,7 @@ function loop(now) {
   if (isHighway()) {
     drawHighwayFrame(ctx, canvas.width, canvas.height, engine, city, car, images);
   } else {
-    // Lane tween, similar feel to the app's 160ms animateFloatAsState.
-    const smoothing = 1 - Math.pow(0.001, dt / 0.16);
-    animatedLane += (engine.laneIndex - animatedLane) * smoothing;
+    stepLaneGlide(engine.laneIndex, dt);
     drawFrame(ctx, canvas.width, canvas.height, engine, city, car, images, animatedLane);
   }
   updateHud();
