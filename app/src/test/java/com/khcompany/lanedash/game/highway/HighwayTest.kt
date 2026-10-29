@@ -152,8 +152,12 @@ class HighwayEngineTest {
 
     @Test
     fun theTopSpeedClimbsWithTheRun() {
-        repeat(100 * 20) { engine.traffic.clear(); engine.tick(0.05f) } // 100 s, no obstacles
-        assertTrue(engine.speed > HighwayEngine.EARLY_TOP_SPEED + 8f)
+        repeat(100 * 20) { // 100 s, no obstacles; steer back to the middle so curves don't push the car onto the grass
+            engine.traffic.clear()
+            engine.steerInput = if (engine.playerX > 0.05f) -1 else if (engine.playerX < -0.05f) 1 else 0
+            engine.tick(0.05f)
+        }
+        assertTrue(engine.speed > HighwayEngine.EARLY_TOP_SPEED + 5f)
         assertTrue(engine.speed <= HighwayEngine.MAX_SPEED)
     }
 

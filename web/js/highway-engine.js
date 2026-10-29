@@ -90,20 +90,20 @@ class RoadStrips {
  * heightFactor (height / width) matches the rear-view sprite.
  */
 const TRAFFIC_KINDS = {
-  SEDAN: { name: 'SEDAN', halfWidth: 0.14, heightFactor: 0.74, minSpeed: 7, maxSpeed: 11, sprite: 'assets/rear/traffic_rear_sedan.png', color: '#8D99AE' },
-  SUV: { name: 'SUV', halfWidth: 0.15, heightFactor: 0.88, minSpeed: 6.5, maxSpeed: 10.5, sprite: 'assets/rear/traffic_rear_suv.png', color: '#5C6478' },
-  BUS: { name: 'BUS', halfWidth: 0.19, heightFactor: 1.05, minSpeed: 5.5, maxSpeed: 8.5, sprite: 'assets/rear/traffic_rear_bus.png', color: '#A7AFBF' },
-  TRUCK: { name: 'TRUCK', halfWidth: 0.18, heightFactor: 1.29, minSpeed: 5, maxSpeed: 8, sprite: 'assets/rear/traffic_rear_truck.png', color: '#7F8CA8' },
+  SEDAN: { name: 'SEDAN', halfWidth: 0.14, heightFactor: 0.74, minSpeed: 9, maxSpeed: 13, sprite: 'assets/rear/traffic_rear_sedan.png', color: '#8D99AE' },
+  SUV: { name: 'SUV', halfWidth: 0.15, heightFactor: 0.88, minSpeed: 8.5, maxSpeed: 12.5, sprite: 'assets/rear/traffic_rear_suv.png', color: '#5C6478' },
+  BUS: { name: 'BUS', halfWidth: 0.19, heightFactor: 1.05, minSpeed: 7, maxSpeed: 10.5, sprite: 'assets/rear/traffic_rear_bus.png', color: '#A7AFBF' },
+  TRUCK: { name: 'TRUCK', halfWidth: 0.18, heightFactor: 1.29, minSpeed: 6, maxSpeed: 9.5, sprite: 'assets/rear/traffic_rear_truck.png', color: '#7F8CA8' },
 };
 
 const HW = {
   START_SPEED: 14,
   /** Top speed at the start of a run; it climbs to MAX_SPEED over RAMP_SECONDS. */
-  EARLY_TOP_SPEED: 32,
-  MAX_SPEED: 46,
+  EARLY_TOP_SPEED: 22,
+  MAX_SPEED: 30,
   RAMP_SECONDS: 120,
   OFFROAD_SPEED: 10,
-  ACCELERATION: 1.6,
+  ACCELERATION: 1.2,
   DECELERATION: 14,
   /** Lateral speed at full steer, in road half-widths per second (a lane takes ~0.15 s). */
   STEER_RATE: 3.0,
@@ -114,18 +114,18 @@ const HW = {
   PLAYER_HALF_WIDTH: 0.125,
   COLLISION_DEPTH: 0.45,
   REMOVE_BEHIND: 4,
-  SCORE_PER_UNIT: 1.5,
+  SCORE_PER_UNIT: 2.4,
   NEAR_MISS_SCORE: 50,
   /** Extra lateral distance beyond touching that still counts as a near miss. */
   NEAR_MISS_MARGIN: 0.10,
   NEAR_MISS_FLASH_SECONDS: 0.9,
   // Traffic density: seconds between spawn attempts, easy -> hard.
-  SPAWN_EASY_INTERVAL: 1.4,
-  SPAWN_HARD_INTERVAL: 0.45,
+  SPAWN_EASY_INTERVAL: 1.2,
+  SPAWN_HARD_INTERVAL: 0.35,
   SPAWN_RETRY_INTERVAL: 0.08,
   // Minimum seconds between two cars passing the player in the same lane, easy -> hard.
   SEPARATION_EASY: 0.5,
-  SEPARATION_HARD: 0.26,
+  SEPARATION_HARD: 0.22,
   // Extra seconds required per lane of distance between two cars, easy -> hard.
   LANE_GAP_EASY: 0.3,
   LANE_GAP_HARD: 0.17,

@@ -24,10 +24,10 @@ enum class TrafficKind(
     val maxSpeed: Float,
     val spriteName: String,
 ) {
-    SEDAN(0.14f, 0.74f, 7f, 11f, "traffic_rear_sedan"),
-    SUV(0.15f, 0.88f, 6.5f, 10.5f, "traffic_rear_suv"),
-    BUS(0.19f, 1.05f, 5.5f, 8.5f, "traffic_rear_bus"),
-    TRUCK(0.18f, 1.29f, 5f, 8f, "traffic_rear_truck"),
+    SEDAN(0.14f, 0.74f, 9f, 13f, "traffic_rear_sedan"),
+    SUV(0.15f, 0.88f, 8.5f, 12.5f, "traffic_rear_suv"),
+    BUS(0.19f, 1.05f, 7f, 10.5f, "traffic_rear_bus"),
+    TRUCK(0.18f, 1.29f, 6f, 9.5f, "traffic_rear_truck"),
 }
 
 class TrafficCar(
@@ -224,11 +224,11 @@ class HighwayEngine(
         const val START_SPEED = 14f
 
         /** Top speed at the start of a run; it climbs to [MAX_SPEED] over [RAMP_SECONDS]. */
-        const val EARLY_TOP_SPEED = 32f
-        const val MAX_SPEED = 46f
+        const val EARLY_TOP_SPEED = 22f
+        const val MAX_SPEED = 30f
         const val RAMP_SECONDS = 120f
         const val OFFROAD_SPEED = 10f
-        const val ACCELERATION = 1.6f
+        const val ACCELERATION = 1.2f
         const val DECELERATION = 14f
 
         /** Lateral speed at full steer, in road half-widths per second (a lane takes ~0.15 s). */
@@ -241,7 +241,7 @@ class HighwayEngine(
         const val PLAYER_HALF_WIDTH = 0.125f
         const val COLLISION_DEPTH = 0.45f
         const val REMOVE_BEHIND = 4f
-        const val SCORE_PER_UNIT = 1.5f
+        const val SCORE_PER_UNIT = 2.4f
         const val NEAR_MISS_SCORE = 50
 
         /** Extra lateral distance beyond touching that still counts as a near miss. */
@@ -249,13 +249,13 @@ class HighwayEngine(
         const val NEAR_MISS_FLASH_SECONDS = 0.9f
 
         // Traffic density: seconds between spawn attempts, easy -> hard.
-        const val SPAWN_EASY_INTERVAL = 1.4f
-        const val SPAWN_HARD_INTERVAL = 0.45f
+        const val SPAWN_EASY_INTERVAL = 1.2f
+        const val SPAWN_HARD_INTERVAL = 0.35f
         const val SPAWN_RETRY_INTERVAL = 0.08f
 
         /** Minimum seconds between two cars passing the player in the same lane, easy -> hard. */
         const val SEPARATION_EASY = 0.5f
-        const val SEPARATION_HARD = 0.26f
+        const val SEPARATION_HARD = 0.22f
 
         /** Extra seconds required per lane of distance between two cars, easy -> hard. */
         const val LANE_GAP_EASY = 0.3f

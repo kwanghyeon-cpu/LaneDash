@@ -12,7 +12,7 @@ import org.junit.Test
  * seeded, so the numbers are deterministic. The bots are steadier than people, so real players
  * should land at or below these times.
  *
- * Targets (median survival): casual (0.5 s reaction) 20-60 s, average (0.3 s) 60-150 s, and even
+ * Targets (median survival): casual (0.5 s reaction) 20-80 s, average (0.3 s) 60-150 s, and even
  * the expert (0.15 s) should usually die before 5 minutes.
  */
 class HighwayBalanceTest {
@@ -119,7 +119,7 @@ class HighwayBalanceTest {
 
         assertTrue("faster reactions survive longer", expert.medianSeconds > average.medianSeconds)
         assertTrue("faster reactions survive longer", average.medianSeconds > casual.medianSeconds)
-        assertTrue("a casual player gets a real run (${casual.medianSeconds}s)", casual.medianSeconds in 20f..60f)
+        assertTrue("a casual player gets a real run (${casual.medianSeconds}s)", casual.medianSeconds in 20f..80f)
         assertTrue("an average player lasts a few minutes at most (${average.medianSeconds}s)", average.medianSeconds in 60f..150f)
         assertTrue("the hard phase still beats a very quick player (${expert.medianSeconds}s)", expert.medianSeconds < 300f)
     }

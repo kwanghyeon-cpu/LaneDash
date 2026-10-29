@@ -2,7 +2,14 @@
 // HighwayFx.kt. Needs highway-engine.js and render.js (drawCitySkylineSprite, drawRoadHaze,
 // drawGroundShadow, hexA, updateFxQuality / fxState) to be loaded first.
 
-const HW_STRIPE_LENGTH = 4;
+const HW_STRIPE_LENGTH = 2;
+
+// Lane dividers are short dashes, like a real highway: one dash per HW_DASH_PERIOD world units. Far
+// away a dash is thinner than a screen row and would shimmer, so past HW_DASH_FADE_DISTANCE the
+// divider is drawn as a faint continuous line instead.
+const HW_DASH_PERIOD = 1.5;
+const HW_DASH_FRACTION = 0.33;
+const HW_DASH_FADE_DISTANCE = 9;
 const HW_GRASS = '#2E7D32';
 const HW_GRASS_DARK = '#276B2A';
 const HW_RUMBLE_RED = '#C4343A';
@@ -176,6 +183,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   const rumbleRed = new Path2D();
   const rumbleWhite = new Path2D();
   const laneMarks = new Path2D();
+  const laneMarksFar = new Path2D();
   for (let i = 0; i < hwStrips.count; i++) {
     const top = hwStrips.yTop[i];
     const height = hwStrips.yBottom[i] + 0.5 - top;
@@ -188,10 +196,14 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     rumblePath.rect(cx - hw - rumble, top, rumble, height);
     rumblePath.rect(cx + hw, top, rumble, height);
     (odd ? roadDark : roadLight).rect(cx - hw, top, hw * 2, height);
-    if (!odd) {
+    const depth = hwStrips.dz[i];
+    const dashPhase = (engine.z + depth) / HW_DASH_PERIOD;
+    const far = depth > HW_DASH_FADE_DISTANCE;
+    if (far || dashPhase - Math.floor(dashPhase) < HW_DASH_FRACTION) {
       const half = hw * 0.02;
+      const marks = far ? laneMarksFar : laneMarks;
       for (let divider = 1; divider < HW_LANE_COUNT; divider++) {
-        laneMarks.rect(cx + (-1 + HW_LANE_SPACING * divider) * hw - half, top, half * 2, height);
+        marks.rect(cx + (-1 + HW_LANE_SPACING * divider) * hw - half, top, half * 2, height);
       }
     }
   }
@@ -205,6 +217,8 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   ctx.fill(roadLight);
   ctx.fillStyle = mixHex(city.roadColor, '#FFFFFF', 0.05);
   ctx.fill(roadDark);
+  ctx.fillStyle = hexA(city.roadLineColor, 0.4);
+  ctx.fill(laneMarksFar);
   ctx.fillStyle = hexA(city.roadLineColor, 0.9);
   ctx.fill(laneMarks);
 

@@ -424,7 +424,7 @@ function showToast(text) {
 
 function updateHud() {
   if (isHighway()) {
-    document.getElementById('hud-speed-text').textContent = `${Math.round(engine.speed * 5)} KM/H`;
+    document.getElementById('hud-speed-text').textContent = `${Math.round(engine.speed * 7)} KM/H`;
     if (engine.nearMissCount > lastNearMissCount) showToast(`NEAR MISS!  +${HW.NEAR_MISS_SCORE}`);
     lastNearMissCount = engine.nearMissCount;
     document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);

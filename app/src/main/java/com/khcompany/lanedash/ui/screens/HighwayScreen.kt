@@ -77,12 +77,23 @@ import com.khcompany.lanedash.ui.components.SpriteCache
 import com.khcompany.lanedash.ui.components.drawCitySkylineSprite
 import com.khcompany.lanedash.ui.components.drawGroundShadow
 import com.khcompany.lanedash.ui.components.drawRoadHaze
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private const val STRIPE_LENGTH = 4f
+private const val STRIPE_LENGTH = 2f
+
+/** Speedometer scale: world units per second to the KM/H shown in the HUD. */
+private const val KMH_PER_UNIT = 7f
+
+// Lane dividers are short dashes, like a real highway: one dash per DASH_PERIOD world units. Far
+// away a dash is thinner than a screen row and would shimmer, so past DASH_FADE_DISTANCE the
+// divider is drawn as a faint continuous line instead.
+private const val DASH_PERIOD = 1.5f
+private const val DASH_FRACTION = 0.33f
+private const val DASH_FADE_DISTANCE = 9f
 
 /** Scale applied to the road layer so its vibration never exposes an empty edge. */
 private const val SHAKE_ZOOM = 1.02f
@@ -131,6 +142,7 @@ fun HighwayScreen(
     val rumbleRed = remember { Path() }
     val rumbleWhite = remember { Path() }
     val laneMarks = remember { Path() }
+    val laneMarksFar = remember { Path() }
     val roadside = remember { RoadsideBatch() }
 
     DisposableEffect(Unit) {
@@ -215,7 +227,7 @@ fun HighwayScreen(
 
             strips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, STRIPE_LENGTH)
             darkGrass.reset(); roadLight.reset(); roadDark.reset()
-            rumbleRed.reset(); rumbleWhite.reset(); laneMarks.reset()
+            rumbleRed.reset(); rumbleWhite.reset(); laneMarks.reset(); laneMarksFar.reset()
             for (i in 0 until strips.count) {
                 val top = strips.yTop[i]
                 val bottom = strips.yBottom[i] + 0.5f
@@ -228,11 +240,15 @@ fun HighwayScreen(
                 rumblePath.addRect(Rect(cx - hw - rumble, top, cx - hw, bottom))
                 rumblePath.addRect(Rect(cx + hw, top, cx + hw + rumble, bottom))
                 (if (odd) roadDark else roadLight).addRect(Rect(cx - hw, top, cx + hw, bottom))
-                if (!odd) {
+                val depth = strips.dz[i]
+                val dashPhase = (engine.z + depth) / DASH_PERIOD
+                val far = depth > DASH_FADE_DISTANCE
+                if (far || dashPhase - floor(dashPhase) < DASH_FRACTION) {
                     val half = hw * 0.02f
+                    val marks = if (far) laneMarksFar else laneMarks
                     for (divider in 1 until HW_LANE_COUNT) {
                         val x = cx + (-1f + HW_LANE_SPACING * divider) * hw
-                        laneMarks.addRect(Rect(x - half, top, x + half, bottom))
+                        marks.addRect(Rect(x - half, top, x + half, bottom))
                     }
                 }
             }
@@ -241,6 +257,7 @@ fun HighwayScreen(
             drawPath(rumbleWhite, RUMBLE_WHITE)
             drawPath(roadLight, lerp(city.roadColor, Color.White, 0.10f))
             drawPath(roadDark, lerp(city.roadColor, Color.White, 0.05f))
+            drawPath(laneMarksFar, city.roadLineColor.copy(alpha = 0.4f))
             drawPath(laneMarks, city.roadLineColor.copy(alpha = 0.9f))
             drawRoadside(
                 batch = roadside,
@@ -416,7 +433,7 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
         ) {
             HudIconText(
                 icon = GameIcon.GAUGE,
-                text = "${(engine.speed * 5f).roundToInt()} KM/H",
+                text = "${(engine.speed * KMH_PER_UNIT).roundToInt()} KM/H",
                 color = MaterialTheme.colorScheme.onBackground,
                 style = MaterialTheme.typography.titleLarge,
                 iconSize = 24,
