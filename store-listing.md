@@ -43,6 +43,30 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 ---
 
+## 릴리스 노트 — 2.0.1 (versionCode 14)
+
+Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 161자, 영어 306자).
+
+<ko-KR>
+하이웨이 모드가 더 좋아졌어요!
+• 좌우 버튼으로 한 번에 한 차선씩 이동
+• 연료, 연료통, 방어막, 자석 아이템 추가
+• 라바콘·바리케이드 등 장애물이 늘고 더 잘 보여요
+• 새로운 세로 타이틀 화면
+• 모드에 맞춰 화면이 자동으로 가로/세로 전환 (클래식은 가로, 하이웨이는 세로)
+</ko-KR>
+
+<en-US>
+Highway mode just got better!
+• Left/right buttons: one lane per tap
+• Fuel, fuel cans, shield and magnet pickups
+• More obstacles, including cones and barriers, and easier to spot
+• New portrait title screen
+• The screen now switches landscape/portrait with the mode (Classic landscape, Highway portrait)
+</en-US>
+
+---
+
 ## 릴리스 노트 — 2.0.0 (versionCode 13)
 
 Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 207자, 영어 363자).
