@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import com.khcompany.lanedash.ui.components.FUEL_ITEM_COLOR
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.draw.alpha
@@ -297,15 +299,34 @@ fun HighwayScreen(
                 if (dz < 1f || dz > HW_DRAW_DISTANCE) continue
                 val y = horizonY + roadH * (HW_D0 / dz)
                 val idx = strips.indexForY(y, h, rowH)
-                val radius = ITEM_RADIUS * strips.halfWidth[idx]
+                val pulse = 1f + 0.08f * sin(engine.elapsedSeconds * 6f + item.id)
+                val radius = ITEM_RADIUS * strips.halfWidth[idx] * pulse
                 val cx = strips.centerX[idx] + item.lx * strips.halfWidth[idx]
-                drawGroundShadow(cx, y, radius * 1.7f, radius * 1.2f, alpha = 0.3f)
-                val center = Offset(cx, y - radius * 1.3f)
+                val color = when (item.type) {
+                    ItemType.FUEL -> FUEL_ITEM_COLOR
+                    ItemType.SHIELD -> SHIELD_ITEM_COLOR
+                    ItemType.MAGNET -> MAGNET_ITEM_COLOR
+                }
+                // A pickup must never be mistaken for a car: a pad ringed on the road, a halo, a
+                // white rim and a gentle bob — none of which a vehicle or an obstacle has.
+                drawOval(
+                    color = color.copy(alpha = 0.85f),
+                    topLeft = Offset(cx - radius * 1.5f, y - radius * 0.38f),
+                    size = Size(radius * 3f, radius * 0.76f),
+                    style = Stroke(width = max(2f, radius * 0.14f)),
+                )
+                val center = Offset(cx, y - radius * 1.35f + sin(engine.elapsedSeconds * 4f + item.id) * radius * 0.12f)
+                drawCircle(
+                    brush = Brush.radialGradient(listOf(color.copy(alpha = 0.6f), Color.Transparent), center = center, radius = radius * 2.3f),
+                    radius = radius * 2.3f,
+                    center = center,
+                )
                 when (item.type) {
                     ItemType.FUEL -> drawFuelCanItem(center, radius)
                     ItemType.SHIELD -> drawShieldItem(center, radius)
                     ItemType.MAGNET -> drawMagnetItem(center, radius)
                 }
+                drawCircle(Color.White.copy(alpha = 0.9f), radius = radius * 1.1f, center = center, style = Stroke(width = max(1.5f, radius * 0.1f)))
             }
 
             // Traffic, far to near so closer cars paint over farther ones.

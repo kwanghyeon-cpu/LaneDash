@@ -31,8 +31,8 @@ enum class TrafficKind(
     SUV(0.15f, 0.88f, 8.5f, 12.5f, "traffic_rear_suv"),
     BUS(0.19f, 1.05f, 7f, 10.5f, "traffic_rear_bus"),
     TRUCK(0.18f, 1.29f, 6f, 9.5f, "traffic_rear_truck"),
-    CONE(0.07f, 1.4f, 0f, 0f, "obstacle_cone"),
-    BARRIER(0.17f, 0.6f, 0f, 0f, "obstacle_barrier"),
+    CONE(0.09f, 1.35f, 0f, 0f, "hw_cone"),
+    BARRIER(0.17f, 1.1f, 0f, 0f, "hw_barrier"),
 }
 
 class TrafficCar(

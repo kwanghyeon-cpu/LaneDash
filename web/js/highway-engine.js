@@ -95,8 +95,8 @@ const TRAFFIC_KINDS = {
   SUV: { name: 'SUV', halfWidth: 0.15, heightFactor: 0.88, minSpeed: 8.5, maxSpeed: 12.5, sprite: 'assets/rear/traffic_rear_suv.png', color: '#5C6478' },
   BUS: { name: 'BUS', halfWidth: 0.19, heightFactor: 1.05, minSpeed: 7, maxSpeed: 10.5, sprite: 'assets/rear/traffic_rear_bus.png', color: '#A7AFBF' },
   TRUCK: { name: 'TRUCK', halfWidth: 0.18, heightFactor: 1.29, minSpeed: 6, maxSpeed: 9.5, sprite: 'assets/rear/traffic_rear_truck.png', color: '#7F8CA8' },
-  CONE: { name: 'CONE', halfWidth: 0.07, heightFactor: 1.4, minSpeed: 0, maxSpeed: 0, sprite: 'assets/obstacles/obstacle_cone.png', color: '#FF7A1A' },
-  BARRIER: { name: 'BARRIER', halfWidth: 0.17, heightFactor: 0.6, minSpeed: 0, maxSpeed: 0, sprite: 'assets/obstacles/obstacle_barrier.png', color: '#E8E8E8' },
+  CONE: { name: 'CONE', halfWidth: 0.09, heightFactor: 1.35, minSpeed: 0, maxSpeed: 0, sprite: 'assets/rear/hw_cone.png', color: '#FF7A1A' },
+  BARRIER: { name: 'BARRIER', halfWidth: 0.17, heightFactor: 1.1, minSpeed: 0, maxSpeed: 0, sprite: 'assets/rear/hw_barrier.png', color: '#FFE03A' },
 };
 
 const HW = {

@@ -237,13 +237,33 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     if (dz < 1 || dz > HW_DRAW_DISTANCE) continue;
     const y = horizonY + roadH * (HW_D0 / dz);
     const idx = hwStrips.indexForY(y, h, rowH);
-    const radius = HW_ITEM_RADIUS * hwStrips.halfWidth[idx];
+    const pulse = 1 + 0.08 * Math.sin(engine.elapsedSeconds * 6 + item.id);
+    const radius = HW_ITEM_RADIUS * hwStrips.halfWidth[idx] * pulse;
     const cx = hwStrips.centerX[idx] + item.lx * hwStrips.halfWidth[idx];
-    drawGroundShadow(ctx, cx, y, radius * 1.7, radius * 1.2, 0.3);
-    const cy = y - radius * 1.3;
+    const color = item.type === 'FUEL' ? FUEL_ITEM_COLOR : item.type === 'SHIELD' ? SHIELD_ITEM_COLOR : MAGNET_ITEM_COLOR;
+    // A pickup must never be mistaken for a car: a pad ringed on the road, a halo, a white rim and
+    // a gentle bob — none of which a vehicle or an obstacle has.
+    ctx.strokeStyle = hexA(color, 0.85);
+    ctx.lineWidth = Math.max(2, radius * 0.14);
+    ctx.beginPath();
+    ctx.ellipse(cx, y, radius * 1.5, radius * 0.38, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    const cy = y - radius * 1.35 + Math.sin(engine.elapsedSeconds * 4 + item.id) * radius * 0.12;
+    const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.3);
+    halo.addColorStop(0, hexA(color, 0.6));
+    halo.addColorStop(1, hexA(color, 0));
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 2.3, 0, Math.PI * 2);
+    ctx.fill();
     if (item.type === 'FUEL') drawFuelCanItem(ctx, cx, cy, radius);
     else if (item.type === 'SHIELD') drawShieldItem(ctx, cx, cy, radius);
     else drawMagnetItem(ctx, cx, cy, radius);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = Math.max(1.5, radius * 0.1);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.1, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   // Traffic, far to near so closer cars paint over farther ones.
