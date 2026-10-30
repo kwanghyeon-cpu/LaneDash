@@ -386,10 +386,11 @@ html, body {
 .mode-best:empty { display: none; }
 
 /* ---------- HIGHWAY RUN (portrait frame) ---------- */
-#screen-game.mode-highway .hud-fuel,
 #screen-game.mode-highway .lane-controls { display: none; }
+/* The fuel bar sits centered under the speed/score row (there isn't room for it between them). */
+#screen-game.mode-highway .hud-fuel { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); }
 #screen-game.mode-highway #game-canvas { touch-action: none; }
-#screen-game.mode-highway .hud-toast { top: 100px; }
+#screen-game.mode-highway .hud-toast { top: 140px; }
 /* The wide two-column result card doesn't fit a portrait frame: stack it. */
 #screen-game.mode-highway .overlay-card { flex-direction: column; gap: 14px; padding: 18px; width: min(360px, 92%); }
 
@@ -430,4 +431,4 @@ html, body {
 /* The pause button sits between the two lane buttons instead of in the corner. */
 #screen-game.mode-highway .pause-btn { left: 50%; transform: translateX(-50%); bottom: 32px; }
 /* The hint sits under the HUD (not on the car) and fades out a few seconds into the run. */
-#screen-game.mode-highway .controls-hint { left: 0; right: 0; top: 140px; bottom: auto; text-align: center; transition: opacity 0.6s; }
+#screen-game.mode-highway .controls-hint { left: 0; right: 0; top: 176px; bottom: auto; text-align: center; transition: opacity 0.6s; }

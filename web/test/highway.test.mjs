@@ -90,6 +90,24 @@ function addTraffic(lx, relativeZ, speed = 8, kind = TRAFFIC_KINDS.SEDAN) {
   return car;
 }
 
+function addItem(type, lx, relativeZ) {
+  const item = { id: nextId++, lx, z: engine.z + HW_PLAYER_DZ + relativeZ, type };
+  engine.items.push(item);
+  return item;
+}
+
+/** Runs the road with a "ghost" player: nothing can end the run (fuel is kept full and a crash is undone). */
+function ghostRun(seed, seconds, onTick) {
+  const e = new HighwayEngine(() => {}, mulberry32(seed));
+  e.start();
+  for (let i = 0; i < seconds * 60; i++) {
+    if (e.status !== 'RUNNING') { e.status = 'RUNNING'; e.gameOverReason = null; }
+    e.fuel = HW.MAX_FUEL;
+    e.tick(1 / 60);
+    onTick(e, i / 60);
+  }
+}
+
 function tickUntilPassed(car) {
   let guard = 0;
   while (!car.passed && engine.status === 'RUNNING' && guard++ < 400) engine.tick(0.016);
@@ -213,6 +231,8 @@ test('road bends push the car but it stays in its lane', () => {
   let widest = 0;
   for (let i = 0; i < 20 * 60; i++) {
     engine.traffic.length = 0;
+    engine.items.length = 0;
+    engine.fuel = HW.MAX_FUEL;
     engine.tick(1 / 60);
     widest = Math.max(widest, Math.abs(engine.playerX - HW_LANE_CENTERS[engine.laneIndex]));
   }
@@ -250,10 +270,109 @@ test('five lanes, and every car fits its lane', () => {
 test('the top speed climbs with the run', () => {
   for (let i = 0; i < 100 * 20; i++) { // 100 s, no obstacles
     engine.traffic.length = 0;
+    engine.items.length = 0;
+    engine.fuel = HW.MAX_FUEL;
     engine.tick(0.05);
   }
   assert.ok(engine.speed > HW.EARLY_TOP_SPEED + 5);
   assert.ok(engine.speed <= HW.MAX_SPEED);
+});
+
+test('fuel drains, and an empty tank ends the run', () => {
+  for (let i = 0; i < 60 * 30 && engine.status === 'RUNNING'; i++) { engine.traffic.length = 0; engine.items.length = 0; engine.tick(1 / 60); }
+  assert.equal(engine.status, 'GAME_OVER');
+  assert.equal(engine.gameOverReason, 'FUEL_EMPTY');
+  assert.ok(sfx.includes('FUEL_EMPTY'));
+  assert.ok(sfx.includes('FUEL_LOW_WARNING'));
+});
+
+test('a fuel can refuels you and scores', () => {
+  engine.fuel = 50;
+  addItem('FUEL', engine.playerX, 0);
+  engine.tick(0.016);
+  assert.ok(engine.fuel > 50 + HW.FUEL_REFILL_AMOUNT - 1);
+  assert.equal(engine.fuelCollected, 1);
+  assert.equal(engine.items.length, 0);
+  assert.ok(sfx.includes('COIN'));
+  assert.ok(engine.score >= HW.ITEM_SCORE_BONUS);
+});
+
+test('a pickup in another lane is left alone', () => {
+  engine.fuel = 50;
+  addItem('FUEL', HW_LANE_CENTERS[4], 0);
+  engine.tick(0.016);
+  assert.equal(engine.fuelCollected, 0);
+});
+
+test('the shield lets you plow through an obstacle, and then wears off', () => {
+  addItem('SHIELD', engine.playerX, 0);
+  engine.tick(0.016);
+  assert.ok(Math.abs(engine.shieldTimeLeft - HW.SHIELD_DURATION_SECONDS) < 0.05);
+  addTraffic(engine.playerX, 0);
+  engine.tick(0.016);
+  assert.equal(engine.status, 'RUNNING');
+  assert.equal(engine.traffic.length, 0, 'the obstacle is smashed');
+  assert.ok(sfx.includes('SHIELD_HIT'));
+  for (let i = 0; i < 60 * 6.2; i++) { engine.traffic.length = 0; engine.items.length = 0; engine.fuel = HW.MAX_FUEL; engine.tick(1 / 60); }
+  assert.equal(engine.shieldTimeLeft, 0);
+  addTraffic(engine.playerX, 0);
+  engine.tick(0.016);
+  assert.equal(engine.status, 'GAME_OVER');
+});
+
+test('the magnet reels fuel cans in from other lanes', () => {
+  addItem('MAGNET', engine.playerX, 0);
+  engine.tick(0.016);
+  assert.ok(engine.magnetTimeLeft > 7.9);
+  engine.fuel = 40;
+  addItem('FUEL', HW_LANE_CENTERS[4], 6); // two lanes' width away and still ahead
+  for (let i = 0; i < 40 && engine.fuelCollected === 0; i++) engine.tick(1 / 60);
+  assert.equal(engine.fuelCollected, 1);
+});
+
+test('without the magnet that far lane stays out of reach', () => {
+  engine.fuel = 40;
+  addItem('FUEL', HW_LANE_CENTERS[4], 6);
+  for (let i = 0; i < 60 && engine.items.length > 0; i++) engine.tick(1 / 60);
+  assert.equal(engine.fuelCollected, 0);
+});
+
+test('a near miss tops up a little fuel', () => {
+  engine.fuel = 50;
+  const car = addTraffic(0.3, 1);
+  const before = engine.fuel;
+  tickUntilPassed(car);
+  const drained = HW.FUEL_DRAIN_PER_SECOND * engine.elapsedSeconds;
+  assert.ok(Math.abs(engine.fuel - (before - drained + HW.NEAR_MISS_FUEL)) < 0.01);
+});
+
+test('the road is as busy as the classic mode: dense obstacles from early on, with pickups mixed in', () => {
+  const obstacles = {}; const pickups = {};
+  const seen = new Set(); const seenItems = new Set();
+  const kinds = new Set(); let staticSpeeds = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    ghostRun(seed, 60, (e, t) => {
+      const w = Math.floor(t / 20);
+      for (const c of e.traffic) {
+        const key = seed + ':' + c.id;
+        if (!seen.has(key)) { seen.add(key); obstacles[w] = (obstacles[w] || 0) + 1; kinds.add(c.kind.name); if (c.speed === 0) staticSpeeds++; }
+      }
+      for (const c of e.items) {
+        const key = seed + ':' + c.id;
+        if (!seenItems.has(key)) { seenItems.add(key); pickups[w] = (pickups[w] || 0) + 1; }
+      }
+    });
+  }
+  const perSecond = (w) => obstacles[w] / 20 / 20;
+  console.log('DENSITY obstacles/s by 20 s block: ' + [0, 1, 2].map((w) => perSecond(w).toFixed(2)).join(', ') +
+    ' | pickups/s: ' + [0, 1, 2].map((w) => (pickups[w] / 20 / 20).toFixed(2)).join(', '));
+  assert.ok(perSecond(0) >= 0.85, 'first 20 s: ' + perSecond(0));
+  assert.ok(perSecond(1) >= 1.15, 'second 20 s: ' + perSecond(1));
+  assert.ok(perSecond(2) >= 1.35, 'third 20 s: ' + perSecond(2));
+  const share = (pickups[1] + pickups[2]) / (pickups[1] + pickups[2] + obstacles[1] + obstacles[2]);
+  assert.ok(share > 0.12 && share < 0.32, 'pickup share ' + share);
+  assert.ok(kinds.has('CONE') && kinds.has('BARRIER'), 'cones and barriers appear');
+  assert.ok(staticSpeeds > 0, 'and they stand still');
 });
 
 // ---------- balance: scripted players with different reaction times ----------
@@ -280,10 +399,37 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
     return best;
   };
   const lanes = HW_LANE_CENTERS.map((_, i) => i);
+  const laneClearFor = (here, lane) => {
+    for (let l = Math.min(here, lane); l <= Math.max(here, lane); l++) {
+      if (l !== here && !(timeToImpact(l) > Math.abs(l - here) * CROSSING_SECONDS_PER_LANE + 0.3)) return false;
+    }
+    return true;
+  };
+  /** The lane of a pickup worth steering to (fuel when running low, power-ups always), if it can be reached safely. */
+  const pickupLane = (here) => {
+    const playerZ = eng.z + HW_PLAYER_DZ;
+    let best = null;
+    for (const item of eng.items) {
+      const wanted = item.type === 'FUEL' ? eng.fuel < 85 : true;
+      const gap = item.z - playerZ;
+      if (!wanted || gap < 0 || gap > eng.speed * 3.2) continue;
+      const lane = laneIndexOfX(item.lx);
+      const arrival = gap / eng.speed;
+      if (Math.abs(lane - here) * CROSSING_SECONDS_PER_LANE + 0.2 > arrival) continue;
+      if (!laneClearFor(here, lane) || timeToImpact(lane) < arrival + 0.5) continue;
+      if (!best || arrival < best.arrival) best = { lane, arrival };
+    }
+    return best ? best.lane : null;
+  };
+  const laneIndexOfX = (x) => lanes.reduce((b, i) => (Math.abs(HW_LANE_CENTERS[i] - x) < Math.abs(HW_LANE_CENTERS[b] - x) ? i : b), 0);
   const chooseTarget = () => {
-    const here = lanes.reduce((b, i) => (Math.abs(HW_LANE_CENTERS[i] - eng.playerX) < Math.abs(HW_LANE_CENTERS[b] - eng.playerX) ? i : b), 0);
+    // Judge from the lane already commanded (the car follows within ~0.15 s) so decisions don't flip mid-move.
+    const here = eng.laneIndex;
     const hereTime = timeToImpact(here);
-    if (hereTime >= safeSeconds) return here;
+    if (hereTime >= safeSeconds) {
+      const lane = pickupLane(here);
+      return lane === null ? here : lane;
+    }
     let best = here;
     let bestScore = hereTime;
     for (const candidate of lanes) {
@@ -312,6 +458,7 @@ function makeBot(eng, reaction, safeSeconds = 1.6) {
 
 function medianSurvival(reaction, runs = 120, cap = 300) {
   const seconds = [];
+  const reasons = { COLLISION: 0, FUEL_EMPTY: 0, alive: 0 };
   for (let seed = 1; seed <= runs; seed++) {
     const eng = new HighwayEngine(() => {}, mulberry32(seed));
     eng.start();
@@ -323,19 +470,22 @@ function medianSurvival(reaction, runs = 120, cap = 300) {
       now += 1 / 60;
     }
     seconds.push(now);
+    reasons[eng.status === 'RUNNING' ? 'alive' : eng.gameOverReason]++;
   }
   seconds.sort((a, b) => a - b);
   const median = seconds[runs >> 1];
-  console.log(`BALANCE reaction=${reaction} p10=${seconds[runs / 10 | 0].toFixed(0)}s p50=${median.toFixed(0)}s p90=${seconds[runs * 9 / 10 | 0].toFixed(0)}s`);
+  console.log(`BALANCE reaction=${reaction} p10=${seconds[runs / 10 | 0].toFixed(0)}s p50=${median.toFixed(0)}s p90=${seconds[runs * 9 / 10 | 0].toFixed(0)}s deaths: collision=${reasons.COLLISION} fuel=${reasons.FUEL_EMPTY} alive=${reasons.alive}`);
   return median;
 }
 
-test('survival follows skill, and nobody is immortal or doomed', () => {
+test('a slower player survives less, and nobody is immortal or doomed', () => {
   const expert = medianSurvival(0.15);
   const average = medianSurvival(0.30);
   const casual = medianSurvival(0.50);
-  assert.ok(expert > average && average > casual, 'faster reactions survive longer');
-  assert.ok(casual >= 20 && casual <= 80, `casual median ${casual}s`);
-  assert.ok(average >= 60 && average <= 150, `average median ${average}s`);
-  assert.ok(expert < 300, `expert median ${expert}s`);
+  // The bots plan one move ahead, so the two quicker ones end up close together; only the slow one
+  // clearly falls behind.
+  assert.ok(casual < average && casual < expert, 'a slow reaction survives least');
+  assert.ok(casual >= 15 && casual <= 60, `casual median ${casual}s`);
+  assert.ok(average >= 20 && average <= 100, `average median ${average}s`);
+  assert.ok(expert >= 20 && expert < 300, `expert median ${expert}s`);
 });

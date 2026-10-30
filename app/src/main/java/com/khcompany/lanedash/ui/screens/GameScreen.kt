@@ -620,7 +620,7 @@ private fun ScoreHud(engine: GameEngine, highScore: Int, modifier: Modifier = Mo
 }
 
 @Composable
-private fun FuelGauge(fuelFraction: () -> Float, modifier: Modifier = Modifier) {
+internal fun FuelGauge(fuelFraction: () -> Float, modifier: Modifier = Modifier) {
     val fraction = fuelFraction().coerceIn(0f, 1f)
     val barColor = when {
         fraction > 0.5f -> Color(0xFF4CAF50)

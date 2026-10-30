@@ -229,7 +229,7 @@ const MODES = [
   },
   {
     id: 'highway', name: '하이웨이', tag: '세로 화면 · NEW',
-    lines: ['차 뒤에서 바라보는 아웃런 스타일', '5차선 도로를 한 차선씩 옮겨 가며 달려요'],
+    lines: ['차 뒤에서 바라보는 아웃런 스타일', '연료통·방어막·자석을 모으며 5차선을 달려요'],
     previewSprites: ['assets/rear/car_rear_1.png'],
   },
 ];
@@ -453,6 +453,12 @@ function updateHud() {
   if (isHighway()) {
     document.getElementById('hud-speed-text').textContent = `${Math.round(engine.speed * 7)} KM/H`;
     document.querySelector('.controls-hint').style.opacity = engine.elapsedSeconds < 4 ? '1' : '0';
+    setPowerupChip('hud-shield', engine.shieldTimeLeft, '방어막');
+    setPowerupChip('hud-magnet', engine.magnetTimeLeft, '자석');
+    const hwFuelPct = Math.max(0, Math.min(100, engine.fuel));
+    const hwFuelBar = document.getElementById('fuel-bar');
+    hwFuelBar.style.width = hwFuelPct + '%';
+    hwFuelBar.style.background = hwFuelPct > 50 ? '#4CAF50' : hwFuelPct > 20 ? '#FFC93C' : '#E63946';
     if (engine.nearMissCount > lastNearMissCount) showToast(`NEAR MISS!  +${HW.NEAR_MISS_SCORE}`);
     lastNearMissCount = engine.nearMissCount;
     document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
@@ -493,7 +499,7 @@ function showGameOver() {
   document.getElementById('gameover-best').textContent =
     engine.score >= bestFor(runMode) ? 'NEW BEST!' : `BEST ${bestFor(runMode)}`;
   document.getElementById('gameover-stats').textContent = isHighway()
-    ? `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회`
+    ? `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회 · 연료 ${engine.fuelCollected}개`
     : `생존 ${Math.floor(engine.elapsedSeconds)}초 · 근접 회피 ${engine.nearMissCount}회 · 연료 ${engine.fuelCollected}개`;
   document.getElementById('gameover-plays').textContent = `오늘 ${recordPlayAndGetToday()}번째 판`;
   document.getElementById('gameover-top').textContent = '';

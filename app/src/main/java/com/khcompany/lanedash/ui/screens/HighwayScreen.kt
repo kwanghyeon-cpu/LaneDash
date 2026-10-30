@@ -60,6 +60,16 @@ import com.khcompany.lanedash.game.CarOption
 import com.khcompany.lanedash.game.CityTheme
 import com.khcompany.lanedash.game.GameMode
 import com.khcompany.lanedash.game.GameStatus
+import kotlin.math.ceil
+import com.khcompany.lanedash.ui.components.drawShieldItem
+import com.khcompany.lanedash.ui.components.drawShieldBubble
+import com.khcompany.lanedash.ui.components.drawMagnetItem
+import com.khcompany.lanedash.ui.components.drawMagnetAura
+import com.khcompany.lanedash.ui.components.drawFuelCanItem
+import com.khcompany.lanedash.ui.components.SHIELD_ITEM_COLOR
+import com.khcompany.lanedash.ui.components.MAGNET_ITEM_COLOR
+import com.khcompany.lanedash.game.ItemType
+import com.khcompany.lanedash.game.GameOverReason
 import com.khcompany.lanedash.game.LeaderboardRepository
 import com.khcompany.lanedash.game.highway.HW_D0
 import com.khcompany.lanedash.game.highway.HW_DRAW_DISTANCE
@@ -101,6 +111,9 @@ private const val VIGNETTE_MAX_ALPHA = 0.5f
 
 /** The left/right lane buttons are big: they are the main controls, tapped constantly. */
 private val LANE_BUTTON_SIZE = 84.dp
+
+/** Pickup badge radius, in road half-widths at the same depth. */
+private const val ITEM_RADIUS = 0.17f
 private val ROAD_GRASS = Color(0xFF2E7D32)
 private val RUMBLE_RED = Color(0xFFC4343A)
 private val RUMBLE_WHITE = Color(0xFFD8D8D8)
@@ -278,6 +291,23 @@ fun HighwayScreen(
                 focalY = horizonY + roadH * 0.2f,
             )
 
+            // Pickups, far to near; they hover just above the road with a small shadow.
+            for (item in engine.items.sortedByDescending { it.z }) {
+                val dz = item.z - engine.z
+                if (dz < 1f || dz > HW_DRAW_DISTANCE) continue
+                val y = horizonY + roadH * (HW_D0 / dz)
+                val idx = strips.indexForY(y, h, rowH)
+                val radius = ITEM_RADIUS * strips.halfWidth[idx]
+                val cx = strips.centerX[idx] + item.lx * strips.halfWidth[idx]
+                drawGroundShadow(cx, y, radius * 1.7f, radius * 1.2f, alpha = 0.3f)
+                val center = Offset(cx, y - radius * 1.3f)
+                when (item.type) {
+                    ItemType.FUEL -> drawFuelCanItem(center, radius)
+                    ItemType.SHIELD -> drawShieldItem(center, radius)
+                    ItemType.MAGNET -> drawMagnetItem(center, radius)
+                }
+            }
+
             // Traffic, far to near so closer cars paint over farther ones.
             for (traffic in engine.traffic.sortedByDescending { it.z }) {
                 val dz = traffic.z - engine.z
@@ -301,6 +331,7 @@ fun HighwayScreen(
             val playerIdx = strips.indexForY(playerY, h, rowH)
             val playerWidth = HighwayEngine.PLAYER_DRAW_WIDTH * strips.halfWidth[playerIdx]
             val sprite = playerSprite
+            val playerHeight = if (sprite != null) playerWidth * sprite.height / sprite.width else playerWidth * 0.8f
             if (sprite != null) {
                 drawRearSprite(
                     sprite,
@@ -318,6 +349,17 @@ fun HighwayScreen(
                     body = car.bodyColor,
                     roof = car.roofColor,
                 )
+            }
+            // Power-up effects around the car, like the classic mode's.
+            val bodyCenter = Offset(w / 2f, playerY - playerHeight / 2f)
+            if (engine.magnetTimeLeft > 0f) {
+                drawMagnetAura(bodyCenter, playerWidth * 0.62f, playerHeight * 0.95f, engine.elapsedSeconds * 60f)
+            }
+            if (engine.shieldTimeLeft > 0f) {
+                // Blinks during the last 1.5 s so you see it about to run out.
+                val ending = engine.shieldTimeLeft < 1.5f
+                val alpha = if (ending && (engine.shieldTimeLeft * 8f).toInt() % 2 == 0) 0.3f else 1f
+                drawShieldBubble(bodyCenter, playerWidth * 0.58f, playerHeight * 0.85f, alpha)
             }
         }
 
@@ -398,6 +440,12 @@ fun HighwayScreen(
         if (engine.status == GameStatus.GAME_OVER) {
             HighwayDialog(title = "GAME OVER") {
                 Text(
+                    text = if (engine.gameOverReason == GameOverReason.FUEL_EMPTY) "연료 소진" else "충돌 발생",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+                Text(
                     text = "SCORE ${engine.score}",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -466,13 +514,35 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            HudIconText(
-                icon = GameIcon.GAUGE,
-                text = "${(engine.speed * KMH_PER_UNIT).roundToInt()} KM/H",
-                color = MaterialTheme.colorScheme.onBackground,
-                style = MaterialTheme.typography.titleLarge,
-                iconSize = 24,
-            )
+            Column {
+                HudIconText(
+                    icon = GameIcon.GAUGE,
+                    text = "${(engine.speed * KMH_PER_UNIT).roundToInt()} KM/H",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.titleLarge,
+                    iconSize = 24,
+                )
+                if (engine.shieldTimeLeft > 0f) {
+                    HudIconText(
+                        icon = GameIcon.SHIELD,
+                        text = "방어막 ${ceil(engine.shieldTimeLeft).toInt()}초",
+                        color = SHIELD_ITEM_COLOR,
+                        style = MaterialTheme.typography.bodyLarge,
+                        iconSize = 18,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                if (engine.magnetTimeLeft > 0f) {
+                    HudIconText(
+                        icon = GameIcon.MAGNET,
+                        text = "자석 ${ceil(engine.magnetTimeLeft).toInt()}초",
+                        color = MAGNET_ITEM_COLOR,
+                        style = MaterialTheme.typography.bodyLarge,
+                        iconSize = 18,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "SCORE ${engine.score}",
@@ -486,6 +556,12 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
                 )
             }
         }
+        FuelGauge(
+            fuelFraction = { engine.fuel / HighwayEngine.MAX_FUEL },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 76.dp),
+        )
         if (engine.nearMissFlash > 0f) {
             Text(
                 text = "NEAR MISS +${HighwayEngine.NEAR_MISS_SCORE}",
@@ -493,7 +569,7 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 110.dp)
+                    .padding(top = 150.dp)
                     .alpha((engine.nearMissFlash / HighwayEngine.NEAR_MISS_FLASH_SECONDS * 1.6f).coerceIn(0f, 1f)),
             )
         }
@@ -613,6 +689,8 @@ private fun trafficColors(kind: TrafficKind): Pair<Color, Color> = when (kind) {
     TrafficKind.SUV -> Color(0xFF5C6478) to Color(0xFF2B2D3A)
     TrafficKind.BUS -> Color(0xFFA7AFBF) to Color(0xFF2B2D3A)
     TrafficKind.TRUCK -> Color(0xFF7F8CA8) to Color(0xFF3B4256)
+    TrafficKind.CONE -> Color(0xFFFF7A1A) to Color(0xFFFFFFFF)
+    TrafficKind.BARRIER -> Color(0xFFE8E8E8) to Color(0xFFE63946)
 }
 
 /** Draws a rear-view sprite bottom-anchored at [bottomY]; the height follows the image's own aspect. */

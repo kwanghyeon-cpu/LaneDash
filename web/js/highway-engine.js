@@ -86,14 +86,17 @@ class RoadStrips {
 }
 
 /**
- * Kinds of traffic ahead; wider/taller ones are slower. halfWidth is in road half-widths and
- * heightFactor (height / width) matches the rear-view sprite.
+ * Kinds of obstacle ahead. Vehicles move with traffic (wider/taller ones slower); cones and
+ * barriers stand still on the road (speed 0, so they rush at you at your own speed). halfWidth is
+ * in road half-widths and heightFactor (height / width) matches the sprite.
  */
 const TRAFFIC_KINDS = {
   SEDAN: { name: 'SEDAN', halfWidth: 0.14, heightFactor: 0.74, minSpeed: 9, maxSpeed: 13, sprite: 'assets/rear/traffic_rear_sedan.png', color: '#8D99AE' },
   SUV: { name: 'SUV', halfWidth: 0.15, heightFactor: 0.88, minSpeed: 8.5, maxSpeed: 12.5, sprite: 'assets/rear/traffic_rear_suv.png', color: '#5C6478' },
   BUS: { name: 'BUS', halfWidth: 0.19, heightFactor: 1.05, minSpeed: 7, maxSpeed: 10.5, sprite: 'assets/rear/traffic_rear_bus.png', color: '#A7AFBF' },
   TRUCK: { name: 'TRUCK', halfWidth: 0.18, heightFactor: 1.29, minSpeed: 6, maxSpeed: 9.5, sprite: 'assets/rear/traffic_rear_truck.png', color: '#7F8CA8' },
+  CONE: { name: 'CONE', halfWidth: 0.07, heightFactor: 1.4, minSpeed: 0, maxSpeed: 0, sprite: 'assets/obstacles/obstacle_cone.png', color: '#FF7A1A' },
+  BARRIER: { name: 'BARRIER', halfWidth: 0.17, heightFactor: 0.6, minSpeed: 0, maxSpeed: 0, sprite: 'assets/obstacles/obstacle_barrier.png', color: '#E8E8E8' },
 };
 
 const HW = {
@@ -115,23 +118,42 @@ const HW = {
   REMOVE_BEHIND: 4,
   SCORE_PER_UNIT: 2.4,
   NEAR_MISS_SCORE: 50,
+  NEAR_MISS_FUEL: 3,
   /** Extra lateral distance beyond touching that still counts as a near miss. */
   NEAR_MISS_MARGIN: 0.10,
   NEAR_MISS_FLASH_SECONDS: 0.9,
-  // Traffic density: seconds between spawn attempts, easy -> hard.
-  SPAWN_EASY_INTERVAL: 1.2,
+  // Fuel and pickups — the classic mode's rules (the drain is a bit gentler: pickups here sit in
+  // lanes you also have to dodge in).
+  MAX_FUEL: 100,
+  FUEL_DRAIN_PER_SECOND: 3.5,
+  FUEL_REFILL_AMOUNT: 26,
+  ITEM_SPAWN_CHANCE: 0.18,
+  POWERUP_SPAWN_CHANCE: 0.05,
+  ITEM_SCORE_BONUS: 50,
+  POWERUP_SCORE_BONUS: 25,
+  SHIELD_DURATION_SECONDS: 6,
+  MAGNET_DURATION_SECONDS: 8,
+  /** A pickup's hitbox half-width, and the seconds it keeps clear of obstacles in its lane. */
+  ITEM_HALF_WIDTH: 0.10,
+  ITEM_CLEARANCE_SECONDS: 0.7,
+  /** World units ahead within which the magnet reels fuel cans in, and how fast (per second). */
+  MAGNET_RANGE: 9,
+  MAGNET_PULL_RATE: 10,
+  // Spawn events: seconds between attempts, easy -> hard, over DENSITY_RAMP_SECONDS.
+  DENSITY_RAMP_SECONDS: 40,
+  SPAWN_EASY_INTERVAL: 0.9,
   SPAWN_HARD_INTERVAL: 0.35,
   SPAWN_RETRY_INTERVAL: 0.08,
-  // Minimum seconds between two cars passing the player in the same lane, easy -> hard.
+  // Minimum seconds between two obstacles passing the player in the same lane, easy -> hard.
   SEPARATION_EASY: 0.5,
   SEPARATION_HARD: 0.22,
-  // Extra seconds required per lane of distance between two cars, easy -> hard.
+  // Extra seconds required per lane of distance between two obstacles, easy -> hard.
   LANE_GAP_EASY: 0.3,
   LANE_GAP_HARD: 0.17,
   MIN_CLOSING_SPEED: 1,
 };
 
-/** Seconds two cars laneDistance lanes apart must pass the player apart at the given difficulty. */
+/** Seconds two obstacles laneDistance lanes apart must pass the player apart at the given difficulty. */
 function requiredGapSeconds(laneDistance, difficulty) {
   const separation = HW.SEPARATION_EASY + (HW.SEPARATION_HARD - HW.SEPARATION_EASY) * difficulty;
   const perLane = HW.LANE_GAP_EASY + (HW.LANE_GAP_HARD - HW.LANE_GAP_EASY) * difficulty;
@@ -146,6 +168,10 @@ function laneIndexOf(lateral) {
   return best;
 }
 
+/**
+ * Simulation for the behind-the-car mode: pure logic, one lane per press (moveLane), fuel,
+ * pickups and near misses following the classic mode's rules.
+ */
 class HighwayEngine {
   /** onSfx(eventName), random() -> [0,1) (inject a seeded one in tests). */
   constructor(onSfx = () => {}, random = Math.random) {
@@ -155,6 +181,7 @@ class HighwayEngine {
     this.paused = false;
     this.gameOverReason = null;
     this.traffic = [];
+    this.items = [];
     this.nextId = 0; // not reset by start(), so ids stay unique across restarts
     this._reset();
   }
@@ -166,6 +193,7 @@ class HighwayEngine {
 
   _reset() {
     this.traffic = [];
+    this.items = []; // pickups: { id, lx, z, type: 'FUEL' | 'SHIELD' | 'MAGNET' }
     this.z = 0; // camera position along the road (world units)
     this.laneIndex = HW_LANE_CENTERS.length >> 1; // lane the player is heading for
     this.playerX = HW_LANE_CENTERS[this.laneIndex]; // lateral position in road half-widths (a spring chasing that lane)
@@ -173,11 +201,17 @@ class HighwayEngine {
     this.speed = HW.START_SPEED;
     this.score = 0;
     this.bonusScore = 0;
+    this.fuel = HW.MAX_FUEL;
+    this.shieldTimeLeft = 0;
+    this.magnetTimeLeft = 0;
     this.nearMissCount = 0;
+    this.fuelCollected = 0;
+    this.fuelWarningPlayed = false;
     this.nearMissFlash = 0; // seconds left of the "NEAR MISS" flash
     this.elapsedSeconds = 0;
     this.heading = 0; // accumulated road heading; the renderer scrolls the skyline by it
     this.spawnCooldown = 1;
+    this.pendingRoll = -1; // the spawn roll waiting for a fair spot (-1 = none)
   }
 
   start() {
@@ -201,15 +235,31 @@ class HighwayEngine {
     const dt = Math.min(dtSeconds, 0.05);
     this.elapsedSeconds += dt;
     if (this.nearMissFlash > 0) this.nearMissFlash = Math.max(0, this.nearMissFlash - dt);
+    this.shieldTimeLeft = Math.max(0, this.shieldTimeLeft - dt);
+    this.magnetTimeLeft = Math.max(0, this.magnetTimeLeft - dt);
 
-    // Difficulty eases from 0 to 1 over the first RAMP_SECONDS of a run, then stays maxed.
+    // Difficulty (speed, how tight the gaps are) eases from 0 to 1 over RAMP_SECONDS; traffic density
+    // ramps up much faster, over DENSITY_RAMP_SECONDS, so the road fills early.
     const difficulty = Math.min(1, Math.max(0, this.elapsedSeconds / HW.RAMP_SECONDS));
+    const density = Math.min(1, Math.max(0, this.elapsedSeconds / HW.DENSITY_RAMP_SECONDS));
 
     // Speed: auto-accelerates toward a top speed that creeps up with difficulty.
     const topSpeed = HW.EARLY_TOP_SPEED + (HW.MAX_SPEED - HW.EARLY_TOP_SPEED) * difficulty;
     this.speed = Math.min(topSpeed, this.speed + HW.ACCELERATION * dt);
     this.z += this.speed * dt;
     this.heading += curveAt(this.z) * this.speed * dt;
+
+    // Fuel drains all the time; cans and near misses refill it.
+    this.fuel = Math.max(0, this.fuel - HW.FUEL_DRAIN_PER_SECOND * dt);
+    if (!this.fuelWarningPlayed && this.fuel <= HW.MAX_FUEL * 0.2) {
+      this.fuelWarningPlayed = true;
+      this.onSfx('FUEL_LOW_WARNING');
+    }
+    if (this.fuel <= 0) {
+      this.onSfx('FUEL_EMPTY');
+      this._endGame('FUEL_EMPTY');
+      return;
+    }
 
     // Chase the target lane with a damped spring (small sub-steps keep it stable), while bends in
     // the road push the car outward.
@@ -224,28 +274,34 @@ class HighwayEngine {
 
     this.spawnCooldown -= dt;
     if (this.spawnCooldown <= 0) {
-      this.spawnCooldown = this._spawnTraffic(difficulty)
-        ? (HW.SPAWN_EASY_INTERVAL + (HW.SPAWN_HARD_INTERVAL - HW.SPAWN_EASY_INTERVAL) * difficulty) *
+      this.spawnCooldown = this._spawnSomething(difficulty)
+        ? (HW.SPAWN_EASY_INTERVAL + (HW.SPAWN_HARD_INTERVAL - HW.SPAWN_EASY_INTERVAL) * density) *
           (0.7 + 0.6 * this.random())
         : HW.SPAWN_RETRY_INTERVAL;
     }
 
+    const playerZ = this.z + HW_PLAYER_DZ;
     for (let i = this.traffic.length - 1; i >= 0; i--) {
       const car = this.traffic[i];
       car.z += car.speed * dt;
-      const relative = car.z - (this.z + HW_PLAYER_DZ);
+      const relative = car.z - playerZ;
       const lateral = Math.abs(car.lx - this.playerX);
       if (Math.abs(relative) < HW.COLLISION_DEPTH && lateral < HW.PLAYER_HALF_WIDTH + car.kind.halfWidth) {
+        if (this.shieldTimeLeft > 0) {
+          // The shield smashes through: the obstacle is gone, the run goes on.
+          this.onSfx('SHIELD_HIT');
+          this.traffic.splice(i, 1);
+          continue;
+        }
         this.onSfx('CRASH');
-        this.status = 'GAME_OVER';
-        this.gameOverReason = 'COLLISION';
-        this.score = this._currentScore();
+        this._endGame('COLLISION');
         return;
       }
       if (!car.passed && relative < -HW.COLLISION_DEPTH) {
         car.passed = true;
         if (lateral < HW.PLAYER_HALF_WIDTH + car.kind.halfWidth + HW.NEAR_MISS_MARGIN) {
           this.bonusScore += HW.NEAR_MISS_SCORE;
+          this.fuel = Math.min(HW.MAX_FUEL, this.fuel + HW.NEAR_MISS_FUEL);
           this.nearMissCount++;
           this.nearMissFlash = HW.NEAR_MISS_FLASH_SECONDS;
           this.onSfx('NEAR_MISS');
@@ -253,41 +309,117 @@ class HighwayEngine {
       }
       if (relative < -HW.REMOVE_BEHIND) this.traffic.splice(i, 1);
     }
+
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i];
+      const relative = item.z - playerZ;
+      // The magnet draws fuel cans from any lane toward the car as they come within reach.
+      if (this.magnetTimeLeft > 0 && item.type === 'FUEL' && relative > -HW.COLLISION_DEPTH && relative < HW.MAGNET_RANGE) {
+        item.lx += (this.playerX - item.lx) * Math.min(1, dt * HW.MAGNET_PULL_RATE);
+      }
+      if (Math.abs(relative) < HW.COLLISION_DEPTH && Math.abs(item.lx - this.playerX) < HW.PLAYER_HALF_WIDTH + HW.ITEM_HALF_WIDTH) {
+        this._collect(item);
+        this.items.splice(i, 1);
+        continue;
+      }
+      if (relative < -HW.REMOVE_BEHIND) this.items.splice(i, 1);
+    }
     this.score = this._currentScore();
+  }
+
+  _endGame(reason) {
+    this.status = 'GAME_OVER';
+    this.gameOverReason = reason;
+    this.score = this._currentScore();
+  }
+
+  _collect(item) {
+    if (item.type === 'FUEL') {
+      this.bonusScore += HW.ITEM_SCORE_BONUS;
+      this.fuel = Math.min(HW.MAX_FUEL, this.fuel + HW.FUEL_REFILL_AMOUNT);
+      this.fuelCollected++;
+      this.onSfx('COIN');
+    } else if (item.type === 'SHIELD') {
+      this.bonusScore += HW.POWERUP_SCORE_BONUS;
+      this.shieldTimeLeft = HW.SHIELD_DURATION_SECONDS;
+      this.onSfx('POWERUP');
+    } else {
+      this.bonusScore += HW.POWERUP_SCORE_BONUS;
+      this.magnetTimeLeft = HW.MAGNET_DURATION_SECONDS;
+      this.onSfx('POWERUP');
+    }
   }
 
   _currentScore() { return Math.floor(this.z * HW.SCORE_PER_UNIT) + this.bonusScore; }
 
-  /** When car will reach the player's position at the current speeds (0 if it already has). */
-  _secondsUntilPassing(car) {
-    const gap = car.z - (this.z + HW_PLAYER_DZ);
+  /** Seconds until something at thingZ moving at thingSpeed reaches the player (0 if it already has). */
+  _secondsUntilPassing(thingZ, thingSpeed) {
+    const gap = thingZ - (this.z + HW_PLAYER_DZ);
     if (gap <= 0) return 0;
-    return gap / Math.max(HW.MIN_CLOSING_SPEED, this.speed - car.speed);
+    return gap / Math.max(HW.MIN_CLOSING_SPEED, this.speed - thingSpeed);
   }
 
-  /**
-   * Adds one car, or none if no lane can take it fairly. A lane change takes ~half a second, so two
-   * cars in different lanes must pass the player at least that far apart (scaled with the lane
-   * distance) — otherwise random spawns create walls nobody can dodge. The required separation
-   * tightens as difficulty rises. Returns whether a car was added.
-   */
-  _spawnTraffic(difficulty) {
-    const pick = Math.floor(this.random() * 20);
-    const kind = pick <= 7 ? TRAFFIC_KINDS.SEDAN : pick <= 13 ? TRAFFIC_KINDS.SUV : pick <= 16 ? TRAFFIC_KINDS.BUS : TRAFFIC_KINDS.TRUCK;
-    const carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * this.random();
-    const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
-    const passIn = (spawnZ - (this.z + HW_PLAYER_DZ)) / Math.max(HW.MIN_CLOSING_SPEED, this.speed - carSpeed);
-
+  _shuffledLanes() {
     const lanes = HW_LANE_CENTERS.map((_, i) => i);
     for (let i = lanes.length - 1; i > 0; i--) { // Fisher-Yates
       const j = Math.floor(this.random() * (i + 1));
       [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
     }
-    for (const lane of lanes) {
-      const fair = !this.traffic.some((other) => {
-        if (other.passed) return false;
-        return Math.abs(this._secondsUntilPassing(other) - passIn) < requiredGapSeconds(Math.abs(lane - laneIndexOf(other.lx)), difficulty);
-      });
+    return lanes;
+  }
+
+  /**
+   * One spawn event, like the classic mode's: mostly obstacles, sometimes a fuel can, rarely a
+   * shield or magnet. Returns whether anything was added (a fair spot may not exist right now).
+   */
+  _spawnSomething(difficulty) {
+    // The roll sticks until it succeeds, so a crowded road doesn't keep re-rolling toward the
+    // pickups (which always fit) and skew the mix.
+    if (this.pendingRoll < 0) this.pendingRoll = this.random();
+    const roll = this.pendingRoll;
+    let added;
+    if (roll < HW.POWERUP_SPAWN_CHANCE) added = this._spawnItem(this.random() < 0.5 ? 'SHIELD' : 'MAGNET');
+    else if (roll < HW.POWERUP_SPAWN_CHANCE + HW.ITEM_SPAWN_CHANCE) added = this._spawnItem('FUEL');
+    else added = this._spawnTraffic(difficulty);
+    if (added) this.pendingRoll = -1;
+    return added;
+  }
+
+  /** A pickup goes in a lane where no obstacle will pass at nearly the same moment. */
+  _spawnItem(type) {
+    const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
+    const passIn = this._secondsUntilPassing(spawnZ, 0);
+    for (const lane of this._shuffledLanes()) {
+      const clear =
+        !this.traffic.some((o) => !o.passed && laneIndexOf(o.lx) === lane &&
+          Math.abs(this._secondsUntilPassing(o.z, o.speed) - passIn) < HW.ITEM_CLEARANCE_SECONDS) &&
+        !this.items.some((o) => laneIndexOf(o.lx) === lane &&
+          Math.abs(this._secondsUntilPassing(o.z, 0) - passIn) < HW.ITEM_CLEARANCE_SECONDS);
+      if (!clear) continue;
+      this.items.push({ id: this.nextId++, lx: HW_LANE_CENTERS[lane], z: spawnZ, type });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Adds one obstacle, or none if no lane can take it fairly. Changing lanes takes time, so two
+   * obstacles in different lanes must pass the player far enough apart for the move between them
+   * (scaled with the lane distance) — otherwise random spawns create walls nobody can dodge. The
+   * required gaps tighten as difficulty rises. Returns whether an obstacle was added.
+   */
+  _spawnTraffic(difficulty) {
+    const pick = Math.floor(this.random() * 20);
+    const kind = pick <= 5 ? TRAFFIC_KINDS.SEDAN : pick <= 10 ? TRAFFIC_KINDS.SUV : pick <= 12 ? TRAFFIC_KINDS.BUS
+      : pick <= 14 ? TRAFFIC_KINDS.TRUCK : pick <= 17 ? TRAFFIC_KINDS.CONE : TRAFFIC_KINDS.BARRIER;
+    const carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * this.random();
+    const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
+    const passIn = this._secondsUntilPassing(spawnZ, carSpeed);
+
+    for (const lane of this._shuffledLanes()) {
+      const fair = !this.traffic.some((other) =>
+        !other.passed &&
+        Math.abs(this._secondsUntilPassing(other.z, other.speed) - passIn) < requiredGapSeconds(Math.abs(lane - laneIndexOf(other.lx)), difficulty));
       if (!fair) continue;
       this.traffic.push({ id: this.nextId++, lx: HW_LANE_CENTERS[lane], z: spawnZ, speed: carSpeed, kind, passed: false });
       return true;

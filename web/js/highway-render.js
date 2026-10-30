@@ -18,6 +18,8 @@ const HW_RUMBLE_WHITE = '#D8D8D8';
 const HW_SHAKE_ZOOM = 1.02;
 const HW_MAX_LEAN_DEGREES = 4;
 const HW_VIGNETTE_MAX_ALPHA = 0.5;
+/** Pickup badge radius, in road half-widths at the same depth. */
+const HW_ITEM_RADIUS = 0.17;
 
 const hwStrips = new RoadStrips();
 
@@ -228,6 +230,22 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     drawHighwaySpeedLines(ctx, w, h, speedRatio, engine.elapsedSeconds, horizonY + roadH * 0.2);
   }
 
+  // Pickups, far to near; they hover just above the road with a small shadow.
+  const itemsFarToNear = engine.items.slice().sort((a, b) => b.z - a.z);
+  for (const item of itemsFarToNear) {
+    const dz = item.z - engine.z;
+    if (dz < 1 || dz > HW_DRAW_DISTANCE) continue;
+    const y = horizonY + roadH * (HW_D0 / dz);
+    const idx = hwStrips.indexForY(y, h, rowH);
+    const radius = HW_ITEM_RADIUS * hwStrips.halfWidth[idx];
+    const cx = hwStrips.centerX[idx] + item.lx * hwStrips.halfWidth[idx];
+    drawGroundShadow(ctx, cx, y, radius * 1.7, radius * 1.2, 0.3);
+    const cy = y - radius * 1.3;
+    if (item.type === 'FUEL') drawFuelCanItem(ctx, cx, cy, radius);
+    else if (item.type === 'SHIELD') drawShieldItem(ctx, cx, cy, radius);
+    else drawMagnetItem(ctx, cx, cy, radius);
+  }
+
   // Traffic, far to near so closer cars paint over farther ones.
   const sorted = engine.traffic.slice().sort((a, b) => b.z - a.z);
   for (const traffic of sorted) {
@@ -244,10 +262,21 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   const playerY = horizonY + roadH * HW_PLAYER_T;
   const playerIdx = hwStrips.indexForY(playerY, h, rowH);
   const playerWidth = HW.PLAYER_DRAW_WIDTH * hwStrips.halfWidth[playerIdx];
+  const playerImg = images[car.rearSprite];
+  const playerHeight = playerImg && playerImg.naturalWidth ? playerWidth * playerImg.naturalHeight / playerImg.naturalWidth : playerWidth * 0.8;
   drawHighwayRearSprite(
-    ctx, images[car.rearSprite], w / 2, playerY, playerWidth,
+    ctx, playerImg, w / 2, playerY, playerWidth,
     engine.steerLean * HW_MAX_LEAN_DEGREES * Math.PI / 180, '#E63946',
   );
+  // Power-up effects around the car, like the classic mode's.
+  const bodyY = playerY - playerHeight / 2;
+  if (engine.magnetTimeLeft > 0) drawMagnetAura(ctx, w / 2, bodyY, playerWidth * 0.62, playerHeight * 0.95, engine.elapsedSeconds * 60);
+  if (engine.shieldTimeLeft > 0) {
+    // Blinks during the last 1.5 s so you see it about to run out.
+    const ending = engine.shieldTimeLeft < 1.5;
+    const alpha = ending && Math.floor(engine.shieldTimeLeft * 8) % 2 === 0 ? 0.3 : 1;
+    drawShieldBubble(ctx, w / 2, bodyY, playerWidth * 0.58, playerHeight * 0.85, alpha);
+  }
 
   ctx.restore();
   if (fancy) drawHighwayVignette(ctx, w, h, speedRatio);
