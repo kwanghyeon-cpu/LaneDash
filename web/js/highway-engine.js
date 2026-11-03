@@ -15,7 +15,7 @@ const HW_PLAYER_T = 0.80;
 /** Distance ahead of the camera at which the player's car is — traffic here is a collision. */
 const HW_PLAYER_DZ = HW_D0 / HW_PLAYER_T;
 /** The horizon's height as a fraction of the screen height. */
-const HW_HORIZON_FRACTION = 0.36;
+const HW_HORIZON_FRACTION = 0.25;
 /** Lateral centers of the traffic lanes (road half-widths), left to right. */
 const HW_LANE_CENTERS = Array.from({ length: HW_LANE_COUNT }, (_, i) => -1 + HW_LANE_SPACING * (i + 0.5));
 

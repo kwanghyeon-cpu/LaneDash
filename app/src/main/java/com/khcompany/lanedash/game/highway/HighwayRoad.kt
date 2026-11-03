@@ -28,7 +28,7 @@ const val HW_PLAYER_T = 0.80f
 const val HW_PLAYER_DZ = HW_D0 / HW_PLAYER_T
 
 /** The horizon's height as a fraction of the screen height. */
-const val HW_HORIZON_FRACTION = 0.36f
+const val HW_HORIZON_FRACTION = 0.25f
 
 /** Lateral centers of the traffic lanes (half-widths), left to right. */
 val HW_LANE_CENTERS = FloatArray(HW_LANE_COUNT) { -1f + HW_LANE_SPACING * (it + 0.5f) }
