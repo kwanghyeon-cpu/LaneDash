@@ -43,6 +43,24 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 ---
 
+## 릴리스 노트 — 2.0.2 (versionCode 15)
+
+Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 79자, 영어 146자).
+
+<ko-KR>
+하이웨이 모드 화면을 다듬었어요!
+• 도로가 더 멀리까지 시원하게 보여요
+• 배경 도시가 작아지고, 도로가 휘면 배경이 반대로 살짝 움직여요
+</ko-KR>
+
+<en-US>
+Highway mode view polish!
+• The road now stretches farther into the distance
+• Smaller city backdrop that leans slightly against the road's bends
+</en-US>
+
+---
+
 ## 릴리스 노트 — 2.0.1 (versionCode 14)
 
 Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 161자, 영어 306자).
