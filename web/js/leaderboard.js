@@ -1,5 +1,5 @@
 // Global Firestore leaderboard — mirrors app/src/main/java/.../game/FirestoreLeaderboardRepository.kt
-// and Leaderboard.kt (same "scores" collection, same field names, same qualifying rule),
+// and Leaderboard.kt (same "scores_highway" collection, same field names, same qualifying rule),
 // so a score set from the web build lands in the same shared leaderboard as the Android app.
 //
 // This needs a Web app registered in the same Firebase project (lanedash-2cc5d) — the
@@ -17,12 +17,10 @@ const FIREBASE_CONFIG = {
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const leaderboardDb = firebase.firestore();
-// One collection per mode: the classic board keeps the original "scores" (shared with the app),
-// the behind-the-car highway mode has its own because the two modes' scores aren't comparable.
-const SCORES_COLLECTIONS = { classic: 'scores', highway: 'scores_highway' };
+const SCORES_COLLECTION = 'scores_highway';
 
-async function fetchTopScores(limit = 10, mode = 'classic') {
-  const snapshot = await leaderboardDb.collection(SCORES_COLLECTIONS[mode])
+async function fetchTopScores(limit = 10) {
+  const snapshot = await leaderboardDb.collection(SCORES_COLLECTION)
     .orderBy('score', 'desc')
     .limit(limit)
     .get();
@@ -36,14 +34,14 @@ async function fetchTopScores(limit = 10, mode = 'classic') {
   return entries;
 }
 
-async function submitScore(name, score, mode = 'classic') {
+async function submitScore(name, score) {
   const cleanName = name.trim().slice(0, 12) || 'PLAYER';
-  await leaderboardDb.collection(SCORES_COLLECTIONS[mode]).add({ name: cleanName, score });
+  await leaderboardDb.collection(SCORES_COLLECTION).add({ name: cleanName, score });
   return cleanName;
 }
 
 /** True if `score` would land inside the top `limit` entries — mirrors qualifiesForTop in Leaderboard.kt. */
-async function qualifiesForTop(score, limit = 10, mode = 'classic') {
-  const top = await fetchTopScores(limit, mode);
+async function qualifiesForTop(score, limit = 10) {
+  const top = await fetchTopScores(limit);
   return top.length < limit || score > top[top.length - 1].score;
 }

@@ -24,13 +24,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.khcompany.lanedash.game.CarOption
 import com.khcompany.lanedash.game.GameCatalog
-import com.khcompany.lanedash.ui.components.drawRetroCar
 import com.khcompany.lanedash.ui.components.rememberOptionalSprite
 
 @Composable
@@ -93,7 +95,7 @@ private fun CarCard(car: CarOption, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(8.dp),
     ) {
-        val sprite = rememberOptionalSprite(car.spriteName)
+        val sprite = rememberOptionalSprite(car.rearSpriteName)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,13 +104,20 @@ private fun CarCard(car: CarOption, selected: Boolean, onClick: () -> Unit) {
                 .background(MaterialTheme.colorScheme.background),
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                drawRetroCar(
-                    car = car,
-                    center = Offset(size.width / 2f, size.height * 0.55f),
-                    width = size.width * 0.8f,
-                    height = size.height * 0.7f,
-                    sprite = sprite,
-                )
+                if (sprite != null) {
+                    // The rear view, bottom-anchored, scaled to fit the card.
+                    val boxH = size.height * 0.8f
+                    val aspect = sprite.width.toFloat() / sprite.height.toFloat()
+                    val drawH = if (boxH * aspect > size.width * 0.8f) size.width * 0.8f / aspect else boxH
+                    val drawW = drawH * aspect
+                    drawImage(
+                        image = sprite,
+                        dstOffset = IntOffset(((size.width - drawW) / 2f).toInt(), (size.height * 0.92f - drawH).toInt()),
+                        dstSize = IntSize(drawW.toInt().coerceAtLeast(1), drawH.toInt().coerceAtLeast(1)),
+                    )
+                } else {
+                    drawRect(car.bodyColor, Offset(size.width * 0.3f, size.height * 0.4f), Size(size.width * 0.4f, size.height * 0.45f))
+                }
             }
         }
         Text(

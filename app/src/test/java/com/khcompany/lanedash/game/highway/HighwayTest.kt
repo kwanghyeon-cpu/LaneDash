@@ -247,7 +247,7 @@ class HighwayEngineTest {
     }
 
     @Test
-    fun theRoadIsAsBusyAsTheClassicMode_denseObstaclesWithPickupsMixedIn() {
+    fun theRoadIsBusy_denseObstaclesWithPickupsMixedIn() {
         // A "ghost" player: shielded and fueled so the run never ends, to count what the road makes.
         val seen = HashSet<Long>()
         val seenItems = HashSet<Long>()
@@ -386,6 +386,41 @@ class HighwayEngineTest {
     fun collidingWithTrafficInYourLaneEndsTheRun() {
         addTraffic(lx = engine.playerX, relativeZ = 0f)
         engine.tick(0.016f)
+        assertEquals(GameStatus.GAME_OVER, engine.status)
+    }
+
+    @Test
+    fun aRewardedContinueRefuelsClearsTheRoadAheadAndWorksOnlyOncePerRun() {
+        addTraffic(lx = engine.playerX, relativeZ = 0f)
+        engine.tick(0.016f)
+        assertEquals(GameStatus.GAME_OVER, engine.status)
+        val scoreAtCrash = engine.score
+
+        addTraffic(lx = engine.playerX, relativeZ = 5f)
+        engine.continueAfterAd()
+        assertEquals(GameStatus.RUNNING, engine.status)
+        assertTrue(engine.usedContinue)
+        assertEquals(HighwayEngine.MAX_FUEL, engine.fuel, 0.01f)
+        assertTrue(engine.shieldTimeLeft > 0f)
+        assertTrue("the car that ended the run and the one right ahead are gone", engine.traffic.isEmpty())
+        assertEquals(scoreAtCrash, engine.score)
+
+        engine.tick(0.016f)
+        assertEquals(GameStatus.RUNNING, engine.status)
+
+        // A second crash stays a crash: one continue per run.
+        engine.start()
+        engine.start()
+        addTraffic(lx = engine.playerX, relativeZ = 0f)
+        engine.tick(0.016f)
+        engine.continueAfterAd()
+        engine.traffic.clear()
+        addTraffic(lx = engine.playerX, relativeZ = 0f)
+        burnFuel(3f) // let the grace shield run out
+        addTraffic(lx = engine.playerX, relativeZ = 0f)
+        engine.tick(0.016f)
+        assertEquals(GameStatus.GAME_OVER, engine.status)
+        engine.continueAfterAd()
         assertEquals(GameStatus.GAME_OVER, engine.status)
     }
 

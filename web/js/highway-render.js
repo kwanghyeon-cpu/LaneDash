@@ -1,5 +1,5 @@
 // Behind-the-car "highway" mode — the drawing half. Ported from ui/screens/HighwayScreen.kt and
-// HighwayFx.kt. Needs highway-engine.js and render.js (drawCitySkylineSprite, drawRoadHaze,
+// HighwayFx.kt. Needs highway-engine.js and art.js (drawCitySkylineSprite, drawRoadHaze,
 // drawGroundShadow, hexA, updateFxQuality / fxState) to be loaded first.
 
 const HW_STRIPE_LENGTH = 2;
@@ -289,7 +289,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     ctx, playerImg, w / 2, playerY, playerWidth,
     engine.steerLean * HW_MAX_LEAN_DEGREES * Math.PI / 180, '#E63946',
   );
-  // Power-up effects around the car, like the classic mode's.
+  // Power-up effects around the car.
   const bodyY = playerY - playerHeight / 2;
   if (engine.magnetTimeLeft > 0) drawMagnetAura(ctx, w / 2, bodyY, playerWidth * 0.62, playerHeight * 0.95, engine.elapsedSeconds * 60);
   if (engine.shieldTimeLeft > 0) {

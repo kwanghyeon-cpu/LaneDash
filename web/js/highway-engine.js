@@ -135,8 +135,7 @@ const HW = {
   /** Extra lateral distance beyond touching that still counts as a near miss. */
   NEAR_MISS_MARGIN: 0.10,
   NEAR_MISS_FLASH_SECONDS: 0.9,
-  // Fuel and pickups — the classic mode's rules (the drain is a bit gentler: pickups here sit in
-  // lanes you also have to dodge in).
+  // Fuel and pickups (the drain is gentle: pickups sit in lanes you also have to dodge in).
   MAX_FUEL: 100,
   FUEL_DRAIN_PER_SECOND: 3.5,
   FUEL_REFILL_AMOUNT: 26,
@@ -182,8 +181,7 @@ function laneIndexOf(lateral) {
 }
 
 /**
- * Simulation for the behind-the-car mode: pure logic, one lane per press (moveLane), fuel,
- * pickups and near misses following the classic mode's rules.
+ * Simulation for the game: pure logic, one lane per press (moveLane), fuel, pickups and near misses.
  */
 class HighwayEngine {
   /** onSfx(eventName), random() -> [0,1) (inject a seeded one in tests). */
@@ -382,7 +380,7 @@ class HighwayEngine {
   }
 
   /**
-   * One spawn event, like the classic mode's: mostly obstacles, sometimes a fuel can, rarely a
+   * One spawn event: mostly obstacles, sometimes a fuel can, rarely a
    * shield or magnet. Returns whether anything was added (a fair spot may not exist right now).
    */
   _spawnSomething(difficulty) {

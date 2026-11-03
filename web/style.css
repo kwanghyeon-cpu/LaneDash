@@ -125,7 +125,6 @@ html, body {
 .pick-card .thumb canvas { width: 100%; height: 100%; display: block; }
 .pick-card .name { margin: 6px 0 0; font-size: 14px; }
 .pick-card .name-en { margin: 0; font-size: 10px; opacity: 0.6; }
-.pick-card .trait { margin: 2px 0 0; font-size: 11px; color: var(--primary); }
 
 /* ---------- GAME ---------- */
 #screen-game { background: #000; }
@@ -154,13 +153,6 @@ html, body {
 .hud-score-value { font-size: 22px; color: var(--primary); }
 .hud-best-value { font-size: 14px; color: var(--on-bg); }
 
-.lane-controls {
-  position: absolute;
-  right: 24px; bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .lane-btn {
   width: 56px; height: 56px;
   border-radius: 999px;
@@ -355,7 +347,6 @@ html, body {
 .settings-value { width: 30px; text-align: right; color: var(--on-bg); opacity: 0.8; flex-shrink: 0; }
 
 @media (max-width: 700px) {
-  .card-grid { grid-template-columns: repeat(2, 1fr); height: calc(100vh - 170px); }
   .title { font-size: 40px; }
 }
 
@@ -376,59 +367,30 @@ html, body {
 .btn { display: inline-flex; align-items: center; justify-content: center; }
 .overlay-btn { justify-content: center; }
 
-/* ---------- MODE SELECT ---------- */
-.mode-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-.mode-card { padding: 18px; display: flex; flex-direction: column; gap: 6px; }
-.mode-tag { margin: 0; font-size: 12px; color: var(--secondary); }
-.mode-name { margin: 0 0 6px; font-size: 24px; font-weight: bold; color: var(--on-bg); }
-.mode-line { margin: 0; font-size: 14px; opacity: 0.8; }
-.mode-best { margin: auto 0 0; padding-top: 10px; color: var(--primary); font-weight: bold; font-size: 14px; }
-.mode-best:empty { display: none; }
-
-/* ---------- HIGHWAY RUN (portrait frame) ---------- */
-#screen-game.mode-highway .lane-controls { display: none; }
+/* ---------- THE RUN (portrait frame) ---------- */
 /* The fuel bar sits centered under the speed/score row (there isn't room for it between them). */
-#screen-game.mode-highway .hud-fuel { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); }
-#screen-game.mode-highway #game-canvas { touch-action: none; }
-#screen-game.mode-highway .hud-toast { top: 140px; }
+#screen-game .hud-fuel { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); }
+#screen-game #game-canvas { touch-action: none; }
+#screen-game .hud-toast { top: 140px; }
 /* The wide two-column result card doesn't fit a portrait frame: stack it. */
-#screen-game.mode-highway .overlay-card { flex-direction: column; gap: 14px; padding: 18px; width: min(360px, 92%); }
+#screen-game .overlay-card { flex-direction: column; gap: 14px; padding: 18px; width: min(360px, 92%); }
 
-/* ---------- LEADERBOARD TABS ---------- */
-.lb-tabs { display: flex; gap: 8px; margin-top: 10px; }
-.lb-tab { padding: 8px 18px; font-size: 14px; background: var(--bg); color: var(--on-bg); border: 1px solid rgba(244,239,255,0.25); }
-.lb-tab.selected { background: var(--primary); color: #1D1233; border-color: var(--primary); }
-
-/* ---------- PORTRAIT FRAME (title, mode picker, and the screens of the highway mode) ---------- */
-#app-frame.portrait .card-grid { grid-template-columns: repeat(2, 1fr); }
-#app-frame.portrait .mode-grid { grid-template-columns: 1fr; height: calc(100% - 150px); }
-#app-frame.portrait .mode-card { min-height: 0; }
+/* ---------- PORTRAIT FRAME ---------- */
+#app-frame.portrait .card-grid { grid-template-columns: repeat(2, 1fr); height: calc(100% - 150px); }
 #app-frame.portrait .title { font-size: 72px; }
 #app-frame.portrait .btn-big { padding: 18px 0; width: 70%; font-size: 22px; }
 
-/* A peek at the real art on each mode card. */
-.mode-thumb {
-  flex: 1;
-  min-height: 70px;
-  margin-top: 8px;
-  border-radius: 10px;
-  background: var(--bg);
-  overflow: hidden;
-}
-.mode-thumb canvas { width: 100%; height: 100%; display: block; }
-
-/* ---------- HIGHWAY LANE BUTTONS (one lane per tap, like the classic mode's up/down) ---------- */
-.hw-controls { display: none; }
-#screen-game.mode-highway .hw-controls {
+/* ---------- LANE BUTTONS (one lane per tap) ---------- */
+#screen-game .hw-controls {
   display: flex;
   position: absolute;
   left: 16px; right: 16px; bottom: 20px;
   justify-content: space-between;
   pointer-events: none;
 }
-#screen-game.mode-highway .hw-btn { width: 76px; height: 76px; pointer-events: auto; }
-#screen-game.mode-highway .hw-btn .ico { width: 36px; height: 36px; }
+#screen-game .hw-btn { width: 76px; height: 76px; pointer-events: auto; }
+#screen-game .hw-btn .ico { width: 36px; height: 36px; }
 /* The pause button sits between the two lane buttons instead of in the corner. */
-#screen-game.mode-highway .pause-btn { left: 50%; transform: translateX(-50%); bottom: 32px; }
+#screen-game .pause-btn { left: 50%; transform: translateX(-50%); bottom: 32px; }
 /* The hint sits under the HUD (not on the car) and fades out a few seconds into the run. */
-#screen-game.mode-highway .controls-hint { left: 0; right: 0; top: 176px; bottom: auto; text-align: center; transition: opacity 0.6s; }
+#screen-game .controls-hint { left: 0; right: 0; top: 176px; bottom: auto; text-align: center; transition: opacity 0.6s; }

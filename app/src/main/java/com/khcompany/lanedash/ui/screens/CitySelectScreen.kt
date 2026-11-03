@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.khcompany.lanedash.game.CityTheme
 import com.khcompany.lanedash.game.GameCatalog
-import com.khcompany.lanedash.ui.components.drawCitySkyline
 import com.khcompany.lanedash.ui.components.drawCitySkylineSprite
 import com.khcompany.lanedash.ui.components.rememberOptionalSprite
 
@@ -113,12 +112,6 @@ private fun CityCard(city: CityTheme, selected: Boolean, onClick: () -> Unit) {
                     )
                 } else {
                     drawRect(brush = Brush.verticalGradient(listOf(city.skyTop, city.skyBottom)))
-                    drawCitySkyline(
-                        city = city,
-                        worldWidthUnits = 10f,
-                        horizonY = horizonY,
-                        parallaxUnits = 0f,
-                    )
                 }
                 drawRect(color = city.roadColor, topLeft = Offset(0f, horizonY), size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.18f))
             }
@@ -133,12 +126,6 @@ private fun CityCard(city: CityTheme, selected: Boolean, onClick: () -> Unit) {
             text = city.englishName,
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 11.sp),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        )
-        Text(
-            text = city.traitText,
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 11.sp),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }

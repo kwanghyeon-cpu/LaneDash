@@ -16,8 +16,7 @@ import kotlinx.coroutines.launch
 private const val TAG = "Leaderboard"
 
 private const val PREFS_NAME = "lane_dash_prefs"
-private const val KEY_HIGH_SCORE = "high_score"
-private const val KEY_HIGHWAY_HIGH_SCORE = "highway_high_score"
+private const val KEY_HIGH_SCORE = "highway_high_score"
 private const val KEY_GAMES_PLAYED = "games_played"
 private const val KEY_PLAYS_DAY = "plays_day"
 private const val KEY_PLAYS_TODAY = "plays_today"
@@ -31,32 +30,22 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
 
     val leaderboardRepository: LeaderboardRepository = FirestoreLeaderboardRepository()
 
-    var selectedMode by mutableStateOf(GameMode.CLASSIC)
     var selectedCityId by mutableStateOf(GameCatalog.cities.first().id)
     var selectedCarId by mutableStateOf(GameCatalog.cars.first().id)
 
     var highScore by mutableIntStateOf(prefs.getInt(KEY_HIGH_SCORE, 0))
         private set
 
-    /** Best score in the behind-the-car mode (kept separate: the two modes aren't comparable). */
-    var highwayHighScore by mutableIntStateOf(prefs.getInt(KEY_HIGHWAY_HIGH_SCORE, 0))
-        private set
-
-    fun reportHighwayScore(score: Int) {
+    fun reportScore(score: Int) {
         lastRunScore = score
-        lastRunMode = GameMode.HIGHWAY
-        if (score > highwayHighScore) {
-            highwayHighScore = score
-            prefs.edit().putInt(KEY_HIGHWAY_HIGH_SCORE, score).apply()
+        if (score > highScore) {
+            highScore = score
+            prefs.edit().putInt(KEY_HIGH_SCORE, score).apply()
         }
     }
 
     /** Score from the run that just ended, so the leaderboard flow can reference it after nav. */
     var lastRunScore by mutableIntStateOf(0)
-        private set
-
-    /** Mode of the run that just ended: decides which leaderboard a submission goes to. */
-    var lastRunMode by mutableStateOf(GameMode.CLASSIC)
         private set
 
     /** Name just submitted for [lastRunScore], so the leaderboard screen can highlight it. */
@@ -73,15 +62,6 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
     )
         private set
 
-    fun reportScore(score: Int) {
-        lastRunScore = score
-        lastRunMode = GameMode.CLASSIC
-        if (score > highScore) {
-            highScore = score
-            prefs.edit().putInt(KEY_HIGH_SCORE, score).apply()
-        }
-    }
-
     /** Call once per completed run. Returns true on every [INTERSTITIAL_EVERY_N_GAMES]th game. */
     fun onGameOverAndShouldShowInterstitial(): Boolean {
         gamesPlayed += 1
@@ -97,7 +77,7 @@ class GameSessionViewModel(application: Application) : AndroidViewModel(applicat
     fun submitToLeaderboard(name: String, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                leaderboardRepository.submitScore(name, lastRunScore, lastRunMode)
+                leaderboardRepository.submitScore(name, lastRunScore)
                 justSubmittedName = name.trim().take(12).ifBlank { "PLAYER" }
             } catch (e: Exception) {
                 Log.e(TAG, "submitScore failed", e)

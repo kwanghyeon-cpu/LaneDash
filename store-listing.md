@@ -4,22 +4,21 @@
 Lane Dash
 
 ## 짧은 설명 (80자 이내)
-레트로 픽셀아트로 도시를 질주하는 차선 러너! 전 세계 랭킹에 도전하세요
+레트로 픽셀아트 도시를 달리는 세로 화면 아웃런 레이싱! 전 세계 랭킹에 도전하세요
 
-(글자 수: 39자)
+(글자 수: 46자)
 
 ## 전체 설명 (4000자 이내)
 
 도시를 달리는 레트로 차선 러너, LANE DASH
 
-차선을 넘나들며 도시를 질주하세요! 장애물을 아슬아슬하게 피하고, 연료를 채우고, 얼마나 멀리 갈 수 있는지 도전하는 픽셀아트 아케이드 러너입니다.
+차선을 넘나들며 도시를 질주하세요! 장애물을 아슬아슬하게 피하고, 연료를 채우고, 얼마나 멀리 갈 수 있는지 도전하는 픽셀아트 아케이드 레이싱입니다.
 
-4개의 도시, 4가지 코스
-서울은 균형 잡힌 기본 코스, 도쿄는 속도가 15% 빠르고, 뉴욕은 교통량이 25% 많고, 파리는 연료가 30% 더 빨리 닳습니다. 어려운 도시일수록 점수 보너스가 있어요.
+세로 화면, 차 뒤에서 바라보는 아웃런 스타일
+커브를 돌며 달리는 5차선 도로! 좌우 버튼으로 한 번에 한 차선씩 옮겨 가며, 속도가 오를수록 점점 빽빽해지는 차량과 라바콘·바리케이드를 피하세요.
 
-두 가지 모드
-- 클래식: 가로 화면에서 5개 차선을 위아래로 오가며 장애물을 피합니다.
-- 하이웨이 (NEW): 세로 화면, 차 뒤에서 바라보는 아웃런 스타일! 좌우로 조향하며 커브를 달리고, 속도가 오를수록 점점 빽빽해지는 5차선 도로를 질주하세요. 모드마다 순위표가 따로 있어요.
+4개의 도시 배경
+서울, 도쿄, 뉴욕, 파리의 스카이라인을 배경으로 달려요.
 
 나만의 차량
 SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요.
@@ -43,20 +42,28 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 ---
 
-## 릴리스 노트 — 2.0.2 (versionCode 15)
+## 릴리스 노트 — 3.0.0 (versionCode 16)
 
-Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 79자, 영어 146자).
+Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 210자, 영어 359자).
 
 <ko-KR>
-하이웨이 모드 화면을 다듬었어요!
-• 도로가 더 멀리까지 시원하게 보여요
-• 배경 도시가 작아지고, 도로가 휘면 배경이 반대로 살짝 움직여요
+Lane Dash가 하이웨이 하나로 새로 태어났어요! 🏎️
+• 클래식 모드를 없애고, 세로 화면 하이웨이 한 가지로 통합
+• 도로가 더 멀리까지 보이고 배경 도시는 작아졌어요
+• 도로가 휘면 배경이 반대로 살짝 움직여요
+• 하이웨이에서도 "광고 보고 이어하기" 가능
+• 화면은 항상 세로 · 도시/자동차 선택도 뒷모습으로 보여요
+• 순위표는 하이웨이 TOP 10 하나로 정리
 </ko-KR>
 
 <en-US>
-Highway mode view polish!
-• The road now stretches farther into the distance
-• Smaller city backdrop that leans slightly against the road's bends
+Lane Dash is now all about Highway! 🏎️
+• Classic mode is gone: one portrait, behind-the-car game
+• The road stretches farther and the city backdrop is smaller
+• The backdrop leans slightly against the road's bends
+• "Watch an ad to continue" now works in Highway too
+• Always portrait; city and car pickers show the rear view
+• One Highway TOP 10 leaderboard
 </en-US>
 
 ---

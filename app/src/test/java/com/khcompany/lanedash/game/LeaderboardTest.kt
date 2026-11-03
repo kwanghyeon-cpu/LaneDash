@@ -9,38 +9,32 @@ import org.junit.Test
 class LeaderboardTest {
 
     private class FakeRepository : LeaderboardRepository {
-        val boards = GameMode.entries.associateWith { mutableListOf<LeaderboardEntry>() }
+        val board = mutableListOf<LeaderboardEntry>()
 
-        override suspend fun fetchTopScores(limit: Int, mode: GameMode): List<LeaderboardEntry> =
-            boards.getValue(mode).sortedByDescending { it.score }.take(limit)
+        override suspend fun fetchTopScores(limit: Int): List<LeaderboardEntry> =
+            board.sortedByDescending { it.score }.take(limit)
 
-        override suspend fun submitScore(name: String, score: Int, mode: GameMode) {
-            boards.getValue(mode).add(LeaderboardEntry(name, score))
+        override suspend fun submitScore(name: String, score: Int) {
+            board.add(LeaderboardEntry(name, score))
         }
     }
 
     @Test
-    fun eachModeKeepsItsOwnBoard() = runBlocking {
+    fun topScoresComeBackBestFirst() = runBlocking {
         val repo = FakeRepository()
-        repo.submitScore("A", 500, GameMode.CLASSIC)
-        repo.submitScore("B", 90, GameMode.HIGHWAY)
+        repo.submitScore("A", 90)
+        repo.submitScore("B", 500)
 
-        assertEquals(listOf("A"), repo.fetchTopScores(10, GameMode.CLASSIC).map { it.name })
-        assertEquals(listOf("B"), repo.fetchTopScores(10, GameMode.HIGHWAY).map { it.name })
+        assertEquals(listOf("B", "A"), repo.fetchTopScores(10).map { it.name })
     }
 
     @Test
-    fun qualifyingIsJudgedAgainstThatModesBoardOnly() = runBlocking {
+    fun qualifyingNeedsARoomySlotOrABetterScore() = runBlocking {
         val repo = FakeRepository()
-        repeat(10) { repo.submitScore("P$it", 1000 + it, GameMode.CLASSIC) }
+        assertTrue("an empty board always has room", repo.qualifiesForTop(50, 10))
 
-        assertFalse(repo.qualifiesForTop(50, 10, GameMode.CLASSIC))
-        assertTrue("an empty highway board always has room", repo.qualifiesForTop(50, 10, GameMode.HIGHWAY))
-    }
-
-    @Test
-    fun modesUseSeparateCollections_withClassicKeepingTheOriginal() {
-        assertEquals("scores", leaderboardCollection(GameMode.CLASSIC))
-        assertEquals("scores_highway", leaderboardCollection(GameMode.HIGHWAY))
+        repeat(10) { repo.submitScore("P$it", 1000 + it) }
+        assertFalse(repo.qualifiesForTop(50, 10))
+        assertTrue(repo.qualifiesForTop(5000, 10))
     }
 }

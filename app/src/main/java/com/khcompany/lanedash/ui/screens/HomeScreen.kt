@@ -39,7 +39,7 @@ private val PillBackground = Color(0xFF120B22).copy(alpha = 0.62f)
  * road, and the player's car stays visible at the bottom.
  */
 @Composable
-fun HomeScreen(highScore: Int, highwayHighScore: Int, onPlay: () -> Unit) {
+fun HomeScreen(highScore: Int, onPlay: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
         // Anchored toward the top (the car sits ~87% down, so it survives the crop even on 16:9
         // screens) to keep the skyline behind the logo.
@@ -93,17 +93,16 @@ fun HomeScreen(highScore: Int, highwayHighScore: Int, onPlay: () -> Unit) {
                     .padding(horizontal = 16.dp, vertical = 6.dp),
             )
             Spacer(modifier = Modifier.weight(0.52f))
-            if (highScore > 0 || highwayHighScore > 0) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+            if (highScore > 0) {
+                Text(
+                    text = "BEST  $highScore",
+                    style = MaterialTheme.typography.titleLarge.copy(shadow = textShadow),
+                    color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier
                         .padding(bottom = 20.dp)
                         .background(PillBackground, RoundedCornerShape(16.dp))
                         .padding(horizontal = 20.dp, vertical = 8.dp),
-                ) {
-                    if (highScore > 0) BestLine("클래식", highScore, textShadow)
-                    if (highwayHighScore > 0) BestLine("하이웨이", highwayHighScore, textShadow)
-                }
+                )
             }
             Button(
                 onClick = onPlay,
@@ -124,13 +123,4 @@ fun HomeScreen(highScore: Int, highwayHighScore: Int, onPlay: () -> Unit) {
             Spacer(modifier = Modifier.weight(0.30f))
         }
     }
-}
-
-@Composable
-private fun BestLine(label: String, score: Int, shadow: Shadow) {
-    Text(
-        text = "$label BEST  $score",
-        style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
-        color = MaterialTheme.colorScheme.secondary,
-    )
 }

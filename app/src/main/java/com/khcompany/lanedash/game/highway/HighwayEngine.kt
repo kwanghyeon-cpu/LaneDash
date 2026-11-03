@@ -59,9 +59,8 @@ class HighwayItem(
 )
 
 /**
- * Simulation for the behind-the-car mode. Pure and resolution independent, like GameEngine:
- * the UI only reads state and calls [moveLane] (one lane per press, like the classic mode).
- * Fuel, pickups and near misses follow the classic mode's rules.
+ * Simulation for the behind-the-car mode. Pure and resolution independent:
+ * the UI only reads state and calls [moveLane] (one lane per press).
  */
 class HighwayEngine(
     private val onSfx: (SfxEvent) -> Unit = {},
@@ -72,6 +71,10 @@ class HighwayEngine(
     var paused by mutableStateOf(false)
         private set
     var gameOverReason by mutableStateOf<GameOverReason?>(null)
+        private set
+
+    /** True once a rewarded-ad continue has been used this run — only one per run. */
+    var usedContinue by mutableStateOf(false)
         private set
 
     /** Camera position along the road (world units). */
@@ -139,6 +142,7 @@ class HighwayEngine(
         status = GameStatus.RUNNING
         paused = false
         gameOverReason = null
+        usedContinue = false
         z = 0f
         laneIndex = HW_LANE_CENTERS.size / 2
         playerX = HW_LANE_CENTERS[laneIndex]
@@ -157,6 +161,24 @@ class HighwayEngine(
         heading = 0f
         spawnCooldown = 1f
         pendingRoll = -1f
+    }
+
+    /**
+     * Resumes a GAME_OVER run after the player watches a rewarded ad: refills the tank, clears the
+     * road just ahead of (and under) the car and grants a short shield, so the crash that ended the
+     * run can't re-fire on the next tick. Score and speed carry over. Once per run.
+     */
+    fun continueAfterAd() {
+        if (status != GameStatus.GAME_OVER || usedContinue) return
+        usedContinue = true
+        fuel = MAX_FUEL
+        fuelWarningPlayed = false
+        shieldTimeLeft = maxOf(shieldTimeLeft, CONTINUE_SHIELD_SECONDS)
+        val playerZ = z + HW_PLAYER_DZ
+        traffic.removeAll { it.z - playerZ in -CONTINUE_CLEAR_BEHIND..CONTINUE_CLEAR_AHEAD }
+        gameOverReason = null
+        paused = false
+        status = GameStatus.RUNNING
     }
 
     fun pause() {
@@ -313,7 +335,7 @@ class HighwayEngine(
     private fun laneOf(lx: Float): Int = HW_LANE_CENTERS.indices.minBy { abs(HW_LANE_CENTERS[it] - lx) }
 
     /**
-     * One spawn event, like the classic mode's: mostly obstacles, sometimes a fuel can, rarely a
+     * One spawn event: mostly obstacles, sometimes a fuel can, rarely a
      * shield or magnet. Returns whether anything was added (a fair spot may not exist right now).
      */
     private fun spawnSomething(difficulty: Float): Boolean {
@@ -408,8 +430,7 @@ class HighwayEngine(
         const val NEAR_MISS_MARGIN = 0.10f
         const val NEAR_MISS_FLASH_SECONDS = 0.9f
 
-        // Fuel and pickups — the classic mode's rules (the drain is a bit gentler: pickups here sit in
-        // lanes you also have to dodge in).
+        // Fuel and pickups (the drain is gentle: pickups sit in lanes you also have to dodge in).
         const val MAX_FUEL = 100f
         const val FUEL_DRAIN_PER_SECOND = 3.5f
         const val FUEL_REFILL_AMOUNT = 26f
@@ -418,6 +439,11 @@ class HighwayEngine(
         const val ITEM_SCORE_BONUS = 50
         const val POWERUP_SCORE_BONUS = 25
         const val SHIELD_DURATION_SECONDS = 6f
+
+        /** Grace shield after a rewarded continue, and how much traffic it clears around the car. */
+        const val CONTINUE_SHIELD_SECONDS = 2.5f
+        const val CONTINUE_CLEAR_AHEAD = 14f
+        const val CONTINUE_CLEAR_BEHIND = 2f
         const val MAGNET_DURATION_SECONDS = 8f
 
         /** A pickup's hitbox half-width, and the seconds it keeps clear of obstacles in its lane. */

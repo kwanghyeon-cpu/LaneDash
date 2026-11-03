@@ -55,12 +55,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.khcompany.lanedash.ads.AdManager
 import com.khcompany.lanedash.audio.SoundManager
 import com.khcompany.lanedash.game.CarOption
 import com.khcompany.lanedash.game.CityTheme
-import com.khcompany.lanedash.game.GameMode
 import com.khcompany.lanedash.game.GameStatus
 import kotlin.math.ceil
 import com.khcompany.lanedash.ui.components.drawShieldItem
@@ -122,16 +123,18 @@ private val RUMBLE_RED = Color(0xFFC4343A)
 private val RUMBLE_WHITE = Color(0xFFD8D8D8)
 
 /**
- * Behind-the-car "OutRun" mode (prototype): placeholder boxes for cars until rear-view sprites
- * exist. Touch the left/right half of the screen to steer. Portrait only — LaneDashApp switches
- * the activity's orientation while this route is showing.
+ * The game: a behind-the-car "OutRun" road. Lane buttons (or a sideways swipe) move one lane per
+ * press. Portrait only (the manifest locks the activity to portrait).
  */
 @Composable
 fun HighwayScreen(
     city: CityTheme,
     car: CarOption,
     highScore: Int,
+    playsToday: Int,
+    adManager: AdManager,
     onScoreFinal: (Int) -> Unit,
+    onGameOverAndShouldShowInterstitial: () -> Boolean,
     leaderboardRepository: LeaderboardRepository,
     onSubmitScore: (name: String) -> Unit,
     onViewLeaderboard: () -> Unit,
@@ -202,6 +205,13 @@ fun HighwayScreen(
             }
         } else if (engine.status == GameStatus.GAME_OVER) {
             onScoreFinal(engine.score)
+            // Interstitials are gated to roughly every Nth game (see
+            // GameSessionViewModel.onGameOverAndShouldShowInterstitial), not shown after every
+            // short run. A rewarded continue resumes the same run, so it counts once, when the
+            // run finally ends.
+            if (!engine.usedContinue && onGameOverAndShouldShowInterstitial() && activity != null) {
+                adManager.showInterstitial(activity) {}
+            }
         }
     }
 
@@ -374,7 +384,7 @@ fun HighwayScreen(
                     roof = car.roofColor,
                 )
             }
-            // Power-up effects around the car, like the classic mode's.
+            // Power-up effects around the car.
             val bodyCenter = Offset(w / 2f, playerY - playerHeight / 2f)
             if (engine.magnetTimeLeft > 0f) {
                 drawMagnetAura(bodyCenter, playerWidth * 0.62f, playerHeight * 0.95f, engine.elapsedSeconds * 60f)
@@ -406,7 +416,7 @@ fun HighwayScreen(
                 },
         )
 
-        // A sideways swipe moves one lane that way, like the classic mode's vertical swipe; the
+        // A sideways swipe moves one lane that way, the
         // buttons below do the same with a tap.
         Box(
             modifier = Modifier
@@ -450,6 +460,28 @@ fun HighwayScreen(
                     ButtonLabel(GameIcon.PLAY, "계속하기")
                 }
                 Button(
+                    onClick = { engine.start() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    ButtonLabel(GameIcon.RETRY, "다시 시작", MaterialTheme.colorScheme.onBackground)
+                }
+                Button(
+                    onClick = { haptics.toggle(!haptics.enabled) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    ButtonLabel(
+                        GameIcon.VIBRATE,
+                        if (haptics.enabled) "진동: 켜짐" else "진동: 꺼짐",
+                        MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                Button(
                     onClick = onExit,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
                     modifier = Modifier
@@ -478,8 +510,36 @@ fun HighwayScreen(
                     text = if (engine.score >= highScore) "NEW BEST!" else "BEST $highScore",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
+                val statColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                Text(
+                    text = "생존 ${engine.elapsedSeconds.toInt()}초 · 근접 회피 ${engine.nearMissCount}회 · 연료 ${engine.fuelCollected}개",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
+                    color = statColor,
+                )
+                Text(
+                    text = "오늘 ${playsToday}번째 판",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 13.sp),
+                    color = statColor,
+                    modifier = Modifier.padding(bottom = 14.dp),
+                )
+                var continueRequested by remember { mutableStateOf(false) }
+                if (!engine.usedContinue && adManager.isRewardedReady && !continueRequested) {
+                    Button(
+                        onClick = {
+                            continueRequested = true
+                            activity?.let { a ->
+                                adManager.showRewarded(a, onReward = { engine.continueAfterAd() }, onUnavailable = { continueRequested = false })
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    ) {
+                        ButtonLabel(GameIcon.PLAY_CIRCLE, "광고 보고 계속하기")
+                    }
+                }
                 HighwayRankSection(
                     score = engine.score,
                     leaderboardRepository = leaderboardRepository,
@@ -494,6 +554,15 @@ fun HighwayScreen(
                         .padding(bottom = 8.dp),
                 ) {
                     ButtonLabel(GameIcon.RANKING, "순위표", MaterialTheme.colorScheme.onBackground)
+                }
+                Button(
+                    onClick = { shareScore(context, engine.score, maxOf(highScore, engine.score), city.displayName) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                ) {
+                    ButtonLabel(GameIcon.SHARE, "공유하기", MaterialTheme.colorScheme.onBackground)
                 }
                 Button(onClick = { engine.start() }, modifier = Modifier.fillMaxWidth()) {
                     ButtonLabel(GameIcon.RETRY, "RETRY")
@@ -624,7 +693,7 @@ private fun HighwayRankSection(
     var name by remember { mutableStateOf("") }
     LaunchedEffect(score) {
         val top = try {
-            leaderboardRepository.fetchTopScores(10, GameMode.HIGHWAY)
+            leaderboardRepository.fetchTopScores(10)
         } catch (e: Exception) {
             android.util.Log.e("Leaderboard", "fetchTopScores failed", e)
             null
