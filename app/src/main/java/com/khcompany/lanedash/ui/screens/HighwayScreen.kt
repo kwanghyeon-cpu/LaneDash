@@ -82,6 +82,7 @@ import com.khcompany.lanedash.game.highway.HW_PLAYER_T
 import com.khcompany.lanedash.game.highway.HighwayEngine
 import com.khcompany.lanedash.game.highway.RoadStrips
 import com.khcompany.lanedash.game.highway.TrafficKind
+import com.khcompany.lanedash.game.highway.skylineScroll
 import com.khcompany.lanedash.haptics.HapticsManager
 import com.khcompany.lanedash.ui.components.GameIcon
 import com.khcompany.lanedash.ui.components.SpriteCache
@@ -228,9 +229,12 @@ fun HighwayScreen(
             val roadH = h - horizonY
             val rowH = max(3f, roadH / 110f)
 
+            // The road first: the skyline reads its bend (see skylineScroll).
+            strips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, STRIPE_LENGTH)
+
             val sky = skyline
             if (sky != null) {
-                drawCitySkylineSprite(sky, horizonY, engine.heading * w * 1.2f, 1f)
+                drawCitySkylineSprite(sky, horizonY, skylineScroll(strips, w), 1f)
             } else {
                 drawRect(
                     brush = Brush.verticalGradient(listOf(city.skyTop, city.skyBottom), endY = horizonY),
@@ -242,7 +246,6 @@ fun HighwayScreen(
             val grassDark = lerp(Color(0xFF276B2A), city.haze, 0.2f)
             drawRect(grassLight, Offset(0f, horizonY), Size(w, roadH))
 
-            strips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, STRIPE_LENGTH)
             darkGrass.reset(); roadLight.reset(); roadDark.reset()
             rumbleRed.reset(); rumbleWhite.reset(); laneMarks.reset(); laneMarksFar.reset()
             for (i in 0 until strips.count) {

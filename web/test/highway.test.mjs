@@ -14,13 +14,13 @@ function loadApi() {
   const src = fs.readFileSync(path.join(jsDir, 'highway-engine.js'), 'utf8');
   const ctx = vm.createContext({ Math, console });
   vm.runInContext(
-    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds };',
+    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll };',
     ctx,
   );
   return ctx.__api;
 }
 
-const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds } = loadApi();
+const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll } = loadApi();
 
 /** Small seeded PRNG so every run is reproducible. */
 function mulberry32(seed) {
@@ -66,6 +66,21 @@ test('indexForY maps rows to strips and clamps', () => {
   assert.equal(s.indexForY(H, H, ROW), 0);
   assert.equal(s.indexForY(0, H, ROW), s.count - 1);
   assert.equal(s.indexForY(H - 30, H, ROW), 2);
+});
+
+test('the skyline leans against the bend and never drifts far', () => {
+  let right = false, left = false, widest = 0;
+  for (let z = 0; z < 4000; z += 5) {
+    const s = strips(z);
+    const scroll = skylineScroll(s, W);
+    const farOffset = s.centerX[s.count - 1] - W / 2;
+    if (Math.abs(farOffset) > 40) assert.equal(scroll > 0, farOffset > 0, 'scrolls the way the road bends at z=' + z);
+    if (scroll > 10) right = true;
+    if (scroll < -10) left = true;
+    widest = Math.max(widest, Math.abs(scroll));
+  }
+  assert.ok(right && left, 'road bending right pushes the skyline left, and the other way round');
+  assert.ok(widest < W * 0.08, 'stays a slight shift: ' + widest + ' px of ' + W);
 });
 
 test('curvature stays gentle', () => {

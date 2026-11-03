@@ -105,3 +105,15 @@ class RoadStrips(val capacity: Int = 200) {
     fun indexForY(y: Float, bottomY: Float, rowHeight: Float): Int =
         ((bottomY - y) / rowHeight).toInt().coerceIn(0, (count - 1).coerceAtLeast(0))
 }
+
+/**
+ * How far the skyline slides against the road's bend, as a fraction of how far the road's far end
+ * sits from the screen center. A skyline that follows the accumulated bend just keeps drifting in
+ * one direction on a long curve; this one leans the other way while the road bends (road to the
+ * right: scenery a little to the left) and settles back to center on a straight.
+ */
+const val HW_SKYLINE_FOLLOW = 0.2f
+
+/** Scroll, in pixels, for the skyline: positive moves it left (the road is bending right). */
+fun skylineScroll(strips: RoadStrips, screenWidth: Float): Float =
+    if (strips.count == 0) 0f else (strips.centerX[strips.count - 1] - screenWidth / 2f) * HW_SKYLINE_FOLLOW

@@ -48,6 +48,26 @@ class HighwayRoadTest {
     }
 
     @Test
+    fun skyline_leansAgainstTheBendAndNeverDriftsFar() {
+        var right = false
+        var left = false
+        var widest = 0f
+        var z = 0f
+        while (z < 4000f) {
+            val s = strips(cameraZ = z)
+            val scroll = skylineScroll(s, w)
+            val farOffset = s.centerX[s.count - 1] - w / 2f
+            if (abs(farOffset) > 40f) assertTrue("scrolls the way the road bends at z=" + z, (scroll > 0f) == (farOffset > 0f))
+            if (scroll > 10f) right = true
+            if (scroll < -10f) left = true
+            widest = maxOf(widest, abs(scroll))
+            z += 5f
+        }
+        assertTrue("road bending right pushes the skyline left, and the other way round", right && left)
+        assertTrue("stays a slight shift (" + widest + " px of " + w + ")", widest < w * 0.08f)
+    }
+
+    @Test
     fun curvature_staysGentle() {
         var z = 0f
         while (z < 2000f) {

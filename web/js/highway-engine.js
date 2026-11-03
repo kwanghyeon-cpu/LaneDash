@@ -86,6 +86,19 @@ class RoadStrips {
 }
 
 /**
+ * How far the skyline slides against the road's bend, as a fraction of how far the road's far end
+ * sits from the screen center. A skyline that follows the accumulated bend just keeps drifting in
+ * one direction on a long curve; this one leans the other way while the road bends (road to the
+ * right: scenery a little to the left) and settles back to center on a straight.
+ */
+const HW_SKYLINE_FOLLOW = 0.2;
+
+/** Scroll, in pixels, for the skyline: positive moves it left (the road is bending right). */
+function skylineScroll(strips, screenWidth) {
+  return strips.count === 0 ? 0 : (strips.centerX[strips.count - 1] - screenWidth / 2) * HW_SKYLINE_FOLLOW;
+}
+
+/**
  * Kinds of obstacle ahead. Vehicles move with traffic (wider/taller ones slower); cones and
  * barriers stand still on the road (speed 0, so they rush at you at your own speed). halfWidth is
  * in road half-widths and heightFactor (height / width) matches the sprite.

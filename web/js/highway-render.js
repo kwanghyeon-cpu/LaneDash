@@ -166,7 +166,9 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   ctx.scale(HW_SHAKE_ZOOM, HW_SHAKE_ZOOM);
   ctx.translate(-w / 2, -h / 2);
 
-  const drewSky = drawCitySkylineSprite(ctx, images[city.sprite], w, horizonY, engine.heading * w * 1.2, 1);
+  // The road first: the skyline reads its bend (see skylineScroll).
+  hwStrips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, HW_STRIPE_LENGTH);
+  const drewSky = drawCitySkylineSprite(ctx, images[city.sprite], w, horizonY, skylineScroll(hwStrips, w), 1);
   if (!drewSky) {
     const grad = ctx.createLinearGradient(0, 0, 0, horizonY);
     grad.addColorStop(0, city.skyTop);
@@ -178,7 +180,6 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   ctx.fillStyle = mixHex(HW_GRASS, city.haze, 0.2);
   ctx.fillRect(0, horizonY, w, roadH);
 
-  hwStrips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, HW_STRIPE_LENGTH);
   const darkGrass = new Path2D();
   const roadLight = new Path2D();
   const roadDark = new Path2D();
