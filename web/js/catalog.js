@@ -8,28 +8,28 @@ const CITIES = [
     sprite: 'assets/cities/city_seoul.png',
     // Haze matches each skyline sprite's horizon color (the sky gradient colors above are only a
     // fallback and don't match the sprites) — used for the road haze in art.js.
-    haze: '#D58E86',
+    haze: '#D39A8E',
   },
   {
     id: 'tokyo', name: '도쿄', nameEn: 'TOKYO',
     skyTop: '#05021A', skyBottom: '#1B0F3D',
     roadColor: '#0D0620', roadLineColor: '#FF2E92',
     sprite: 'assets/cities/city_tokyo.png',
-    haze: '#9EC4E6',
+    haze: '#A3B8DA',
   },
   {
     id: 'newyork', name: '뉴욕', nameEn: 'NEW YORK',
     skyTop: '#FF9A56', skyBottom: '#FFD56B',
     roadColor: '#3A2E28', roadLineColor: '#FFF3B0',
     sprite: 'assets/cities/city_newyork.png',
-    haze: '#8EBDE8',
+    haze: '#9DCBE6',
   },
   {
     id: 'paris', name: '파리', nameEn: 'PARIS',
     skyTop: '#BFE3FF', skyBottom: '#F6E7D8',
     roadColor: '#4A4038', roadLineColor: '#FFFFFF',
     sprite: 'assets/cities/city_paris.png',
-    haze: '#1B2641',
+    haze: '#2B556B',
   },
 ];
 

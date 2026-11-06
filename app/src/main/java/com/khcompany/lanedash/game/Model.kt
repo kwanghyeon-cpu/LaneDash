@@ -51,7 +51,7 @@ object GameCatalog {
             roadColor = Color(0xFF241830),
             roadLineColor = Color(0xFFFFD166),
             spriteName = "city_seoul",
-            haze = Color(0xFFD58E86),
+            haze = Color(0xFFD39A8E),
         ),
         CityTheme(
             id = "tokyo",
@@ -62,7 +62,7 @@ object GameCatalog {
             roadColor = Color(0xFF0D0620),
             roadLineColor = Color(0xFFFF2E92),
             spriteName = "city_tokyo",
-            haze = Color(0xFF9EC4E6),
+            haze = Color(0xFFA3B8DA),
         ),
         CityTheme(
             id = "newyork",
@@ -73,7 +73,7 @@ object GameCatalog {
             roadColor = Color(0xFF3A2E28),
             roadLineColor = Color(0xFFFFF3B0),
             spriteName = "city_newyork",
-            haze = Color(0xFF8EBDE8),
+            haze = Color(0xFF9DCBE6),
         ),
         CityTheme(
             id = "paris",
@@ -84,7 +84,7 @@ object GameCatalog {
             roadColor = Color(0xFF4A4038),
             roadLineColor = Color(0xFFFFFFFF),
             spriteName = "city_paris",
-            haze = Color(0xFF1B2641),
+            haze = Color(0xFF2B556B),
         ),
     )
 

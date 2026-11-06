@@ -40,7 +40,7 @@ const state = {
 // Bump this whenever an asset file is replaced in place (same filename, new pixels) — the
 // dev server sends no cache-control headers, so browsers otherwise keep serving stale
 // bytes for a path they've already fetched, same issue as the JS/CSS ?v= busters.
-const ASSET_VERSION = 2;
+const ASSET_VERSION = 3;
 
 const images = {};
 function preloadImage(path) {
