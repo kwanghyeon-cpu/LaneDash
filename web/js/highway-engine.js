@@ -14,6 +14,31 @@ const HW_D0 = 1;
 const HW_PLAYER_T = 0.80;
 /** Distance ahead of the camera at which the player's car is — traffic here is a collision. */
 const HW_PLAYER_DZ = HW_D0 / HW_PLAYER_T;
+/**
+ * How the road is projected. A pure 1/dz perspective makes a car crawl for most of its approach and
+ * then cross the lower half of the screen in a few frames, and pinches the road to a point at the
+ * horizon. Here the depth mapping is softened (t = A / (dz + soften), so a car moves down the screen
+ * far more evenly) and the road keeps a real width at the horizon.
+ */
+const HW_DEPTH_SOFTEN = 4;
+const HW_DEPTH_SCALE = HW_PLAYER_T * (HW_PLAYER_DZ + HW_DEPTH_SOFTEN);
+/** Screen row fraction t (0 horizon .. 1 bottom edge) of something dz ahead of the camera. */
+function tForDz(dz) { return HW_DEPTH_SCALE / (dz + HW_DEPTH_SOFTEN); }
+/** Inverse of tForDz: the depth shown at row fraction t. */
+function dzForT(t) { return HW_DEPTH_SCALE / t - HW_DEPTH_SOFTEN; }
+/** Road half-width at the horizon, relative to the bottom edge (1 would be the old, parallel road). */
+const HW_ROAD_FAR_WIDTH = 0.30;
+/** Road half-width at the bottom edge, as a fraction of the screen width (the road nearly fills it at the car). */
+const HW_ROAD_NEAR_HALF = 0.56;
+/** Road half-width in pixels at row fraction t. */
+function roadHalfWidth(t, screenWidth) {
+  return screenWidth * HW_ROAD_NEAR_HALF * (HW_ROAD_FAR_WIDTH + (1 - HW_ROAD_FAR_WIDTH) * t);
+}
+/** Things this close to the draw distance fade in, so nothing pops into view. */
+const HW_FADE_DISTANCE = 14;
+/** 0..1 opacity of something dz ahead: fades in over the last HW_FADE_DISTANCE before the draw distance. */
+function fadeForDz(dz) { return Math.min(1, Math.max(0, (HW_DRAW_DISTANCE - dz) / HW_FADE_DISTANCE)); }
+
 /** The horizon's height as a fraction of the screen height. */
 const HW_HORIZON_FRACTION = 0.25;
 /** Lateral centers of the traffic lanes (road half-widths), left to right. */
@@ -33,7 +58,7 @@ function curveAt(z) {
 /**
  * The visible road as horizontal strips from the bottom edge up to the horizon, recomputed every
  * frame into preallocated arrays. Screen row fraction t (0 at the horizon, 1 at the bottom) maps
- * to depth dz = HW_D0 / t; the road's half-width is proportional to t.
+ * to depth dz = dzForT(t); the road's half-width is roadHalfWidth(t).
  */
 class RoadStrips {
   constructor(capacity = 200) {
@@ -60,23 +85,37 @@ class RoadStrips {
     let y = bottomY;
     while (n < this.capacity && y - rowHeight > horizonY + 1) {
       const t = ((y - rowHeight / 2) - horizonY) / roadHeight;
-      const d = HW_D0 / t;
-      const step = d - prevDz;
+      // The bend is worked out on the plain 1/t depth (so its shape is unchanged); the width and the
+      // stripes use the softened depth.
+      const dBend = HW_D0 / t;
+      const step = dBend - prevDz;
       // Double integral of the curvature: the road's lateral drift grows with distance.
-      dxAcc += curveAt(cameraZ + d) * step;
+      dxAcc += curveAt(cameraZ + dBend) * step;
       xOff += dxAcc * step;
-      prevDz = d;
+      prevDz = dBend;
+      const d = dzForT(t);
 
       this.yBottom[n] = y;
       this.yTop[n] = y - rowHeight;
-      this.halfWidth[n] = hw0 * t;
-      this.centerX[n] = screenWidth / 2 + (xOff - cameraX) * this.halfWidth[n];
+      this.halfWidth[n] = roadHalfWidth(t, screenWidth);
+      this.centerX[n] = screenWidth / 2 + xOff * hw0 * t - cameraX * this.halfWidth[n];
       this.dz[n] = d;
       this.band[n] = Math.floor((cameraZ + d) / stripeLength) & 1;
       n++;
       y -= rowHeight;
     }
     this.count = n;
+  }
+
+  /** Road center x at screen row y, interpolated between the two nearest strips (no stair-stepping). */
+  centerXAt(y, bottomY, rowHeight) {
+    const last = this.count - 1;
+    if (last < 0) return 0;
+    const f = (bottomY - y) / rowHeight - 0.5;
+    const i0 = Math.min(last, Math.max(0, Math.floor(f)));
+    const i1 = Math.min(last, i0 + 1);
+    const k = Math.min(1, Math.max(0, f - i0));
+    return this.centerX[i0] + (this.centerX[i1] - this.centerX[i0]) * k;
   }
 
   /** Index of the strip containing screen row y, clamped to the valid range. */

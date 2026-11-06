@@ -40,8 +40,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import com.khcompany.lanedash.ui.components.FUEL_ITEM_COLOR
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -74,12 +76,14 @@ import com.khcompany.lanedash.ui.components.MAGNET_ITEM_COLOR
 import com.khcompany.lanedash.game.ItemType
 import com.khcompany.lanedash.game.GameOverReason
 import com.khcompany.lanedash.game.LeaderboardRepository
-import com.khcompany.lanedash.game.highway.HW_D0
 import com.khcompany.lanedash.game.highway.HW_DRAW_DISTANCE
 import com.khcompany.lanedash.game.highway.HW_HORIZON_FRACTION
 import com.khcompany.lanedash.game.highway.HW_LANE_COUNT
 import com.khcompany.lanedash.game.highway.HW_LANE_SPACING
 import com.khcompany.lanedash.game.highway.HW_PLAYER_T
+import com.khcompany.lanedash.game.highway.fadeForDz
+import com.khcompany.lanedash.game.highway.roadHalfWidth
+import com.khcompany.lanedash.game.highway.tForDz
 import com.khcompany.lanedash.game.highway.HighwayEngine
 import com.khcompany.lanedash.game.highway.RoadStrips
 import com.khcompany.lanedash.game.highway.TrafficKind
@@ -96,7 +100,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private const val STRIPE_LENGTH = 2f
+private const val STRIPE_LENGTH = 1f
 
 /** Speedometer scale: world units per second to the KM/H shown in the HUD. */
 private const val KMH_PER_UNIT = 7f
@@ -104,9 +108,9 @@ private const val KMH_PER_UNIT = 7f
 // Lane dividers are short dashes, like a real highway: one dash per DASH_PERIOD world units. Far
 // away a dash is thinner than a screen row and would shimmer, so past DASH_FADE_DISTANCE the
 // divider is drawn as a faint continuous line instead.
-private const val DASH_PERIOD = 1.5f
+private const val DASH_PERIOD = 1.2f
 private const val DASH_FRACTION = 0.33f
-private const val DASH_FADE_DISTANCE = 9f
+private const val DASH_FADE_DISTANCE = 14f
 
 /** Scale applied to the road layer so its vibration never exposes an empty edge. */
 private const val SHAKE_ZOOM = 1.02f
@@ -310,11 +314,12 @@ fun HighwayScreen(
             for (item in engine.items.sortedByDescending { it.z }) {
                 val dz = item.z - engine.z
                 if (dz < 1f || dz > HW_DRAW_DISTANCE) continue
-                val y = horizonY + roadH * (HW_D0 / dz)
-                val idx = strips.indexForY(y, h, rowH)
+                val t = tForDz(dz)
+                val y = horizonY + roadH * t
+                val half = roadHalfWidth(t, w)
                 val pulse = 1f + 0.08f * sin(engine.elapsedSeconds * 6f + item.id)
-                val radius = ITEM_RADIUS * strips.halfWidth[idx] * pulse
-                val cx = strips.centerX[idx] + item.lx * strips.halfWidth[idx]
+                val radius = ITEM_RADIUS * half * pulse
+                val cx = strips.centerXAt(y, h, rowH) + item.lx * half
                 val color = when (item.type) {
                     ItemType.FUEL -> FUEL_ITEM_COLOR
                     ItemType.SHIELD -> SHIELD_ITEM_COLOR
@@ -322,6 +327,7 @@ fun HighwayScreen(
                 }
                 // A pickup must never be mistaken for a car: a pad ringed on the road, a halo, a
                 // white rim and a gentle bob — none of which a vehicle or an obstacle has.
+                withFade(fadeForDz(dz), Rect(cx - radius * 3.5f, y - radius * 5.5f, cx + radius * 3.5f, y + radius)) {
                 drawOval(
                     color = color.copy(alpha = 0.85f),
                     topLeft = Offset(cx - radius * 1.5f, y - radius * 0.38f),
@@ -340,30 +346,32 @@ fun HighwayScreen(
                     ItemType.MAGNET -> drawMagnetItem(center, radius)
                 }
                 drawCircle(Color.White.copy(alpha = 0.9f), radius = radius * 1.1f, center = center, style = Stroke(width = max(1.5f, radius * 0.1f)))
+                }
             }
 
             // Traffic, far to near so closer cars paint over farther ones.
             for (traffic in engine.traffic.sortedByDescending { it.z }) {
                 val dz = traffic.z - engine.z
                 if (dz < 1f || dz > HW_DRAW_DISTANCE) continue
-                val t = HW_D0 / dz
+                val t = tForDz(dz)
                 val y = horizonY + roadH * t
-                val idx = strips.indexForY(y, h, rowH)
-                val width = traffic.kind.halfWidth * 2f * strips.halfWidth[idx]
-                val cx = strips.centerX[idx] + traffic.lx * strips.halfWidth[idx]
+                val half = roadHalfWidth(t, w)
+                val width = traffic.kind.halfWidth * 2f * half
+                val cx = strips.centerXAt(y, h, rowH) + traffic.lx * half
                 val trafficSprite = trafficSprites[traffic.kind]
-                if (trafficSprite != null) {
-                    drawRearSprite(trafficSprite, cx = cx, bottomY = y, width = width)
-                } else {
-                    val (body, roof) = trafficColors(traffic.kind)
-                    drawRearCar(cx, y, width, traffic.kind.heightFactor, body, roof)
+                withFade(fadeForDz(dz), Rect(cx - width, y - width * 1.8f, cx + width, y + width * 0.2f)) {
+                    if (trafficSprite != null) {
+                        drawRearSprite(trafficSprite, cx = cx, bottomY = y, width = width)
+                    } else {
+                        val (body, roof) = trafficColors(traffic.kind)
+                        drawRearCar(cx, y, width, traffic.kind.heightFactor, body, roof)
+                    }
                 }
             }
 
             // The player stays at the screen's horizontal center; the road slides under them.
             val playerY = horizonY + roadH * HW_PLAYER_T
-            val playerIdx = strips.indexForY(playerY, h, rowH)
-            val playerWidth = HighwayEngine.PLAYER_DRAW_WIDTH * strips.halfWidth[playerIdx]
+            val playerWidth = HighwayEngine.PLAYER_DRAW_WIDTH * roadHalfWidth(HW_PLAYER_T, w)
             val sprite = playerSprite
             val playerHeight = if (sprite != null) playerWidth * sprite.height / sprite.width else playerWidth * 0.8f
             if (sprite != null) {
@@ -784,6 +792,21 @@ private fun trafficColors(kind: TrafficKind): Pair<Color, Color> = when (kind) {
     TrafficKind.TRUCK -> Color(0xFF7F8CA8) to Color(0xFF3B4256)
     TrafficKind.CONE -> Color(0xFFFF7A1A) to Color(0xFFFFFFFF)
     TrafficKind.BARRIER -> Color(0xFFE8E8E8) to Color(0xFFE63946)
+}
+
+/**
+ * Runs [block] at [fade] opacity (things entering at the far end fade in instead of popping up). Only
+ * the small [bounds] are put on a separate layer, and only while the thing is actually fading.
+ */
+private inline fun DrawScope.withFade(fade: Float, bounds: Rect, block: DrawScope.() -> Unit) {
+    if (fade >= 0.99f) {
+        block()
+        return
+    }
+    val paint = Paint().apply { alpha = fade }
+    drawIntoCanvas { it.saveLayer(bounds, paint) }
+    block()
+    drawIntoCanvas { it.restore() }
 }
 
 /** Draws a rear-view sprite bottom-anchored at [bottomY]; the height follows the image's own aspect. */

@@ -2,14 +2,14 @@
 // HighwayFx.kt. Needs highway-engine.js and art.js (drawCitySkylineSprite, drawRoadHaze,
 // drawGroundShadow, hexA, updateFxQuality / fxState) to be loaded first.
 
-const HW_STRIPE_LENGTH = 2;
+const HW_STRIPE_LENGTH = 1;
 
 // Lane dividers are short dashes, like a real highway: one dash per HW_DASH_PERIOD world units. Far
 // away a dash is thinner than a screen row and would shimmer, so past HW_DASH_FADE_DISTANCE the
 // divider is drawn as a faint continuous line instead.
-const HW_DASH_PERIOD = 1.5;
+const HW_DASH_PERIOD = 1.2;
 const HW_DASH_FRACTION = 0.33;
-const HW_DASH_FADE_DISTANCE = 9;
+const HW_DASH_FADE_DISTANCE = 14;
 const HW_GRASS = '#2E7D32';
 const HW_GRASS_DARK = '#276B2A';
 const HW_RUMBLE_RED = '#C4343A';
@@ -41,7 +41,7 @@ const HW_BUSH_LATERAL = 1.62;
  * pace — nothing tells you how fast you are going like objects whizzing by at the edge. Drawn
  * before the road haze so far ones fade into it.
  */
-function drawHighwayRoadside(ctx, h, cameraZ, horizonY, rowH, city) {
+function drawHighwayRoadside(ctx, w, h, cameraZ, horizonY, rowH, city) {
   const roadH = h - horizonY;
   const posts = new Path2D();
   const lamps = new Path2D();
@@ -52,23 +52,25 @@ function drawHighwayRoadside(ctx, h, cameraZ, horizonY, rowH, city) {
     const index = firstIndex + n;
     const dz = index * HW_ROADSIDE_SPACING - cameraZ;
     if (dz < HW_D0 || dz > HW_DRAW_DISTANCE) continue;
-    const y = horizonY + roadH * (HW_D0 / dz);
-    const i = hwStrips.indexForY(y, h, rowH);
-    const hw = hwStrips.halfWidth[i];
-    const cx = hwStrips.centerX[i];
+    const t = tForDz(dz);
+    const y = horizonY + roadH * t;
+    const hw = roadHalfWidth(t, w);
+    const cx = hwStrips.centerXAt(y, h, rowH);
     const lampSide = index % 2 === 0 ? -1 : 1;
 
     const postW = Math.max(1, hw * 0.035);
-    const postH = hw * 1.5;
+    // Posts and bushes shrink with distance faster than the (wide) far road does.
+    const objScale = 0.35 + 0.65 * t;
+    const postH = hw * 1.5 * objScale;
     const lampX = cx + lampSide * HW_LAMP_LATERAL * hw;
     posts.rect(lampX - postW / 2, y - postH, postW, postH);
     // The arm reaches over the road, with the light at its tip.
     const armEndX = lampX - lampSide * hw * 0.26;
     posts.rect(Math.min(lampX, armEndX), y - postH, Math.abs(armEndX - lampX), postW);
-    const lampW = hw * 0.11;
+    const lampW = hw * 0.11 * objScale;
     lamps.rect(armEndX - lampW / 2, y - postH + postW, lampW, postW * 1.2);
 
-    const bushR = hw * 0.16;
+    const bushR = hw * 0.16 * objScale;
     const bushX = cx - lampSide * HW_BUSH_LATERAL * hw;
     bushes.moveTo(bushX + bushR * 1.3, y - bushR * 0.75);
     bushes.ellipse(bushX, y - bushR * 0.75, bushR * 1.3, bushR * 0.75, 0, 0, Math.PI * 2);
@@ -225,7 +227,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   ctx.fillStyle = hexA(city.roadLineColor, 0.9);
   ctx.fill(laneMarks);
 
-  drawHighwayRoadside(ctx, h, engine.z, horizonY, rowH, city);
+  drawHighwayRoadside(ctx, w, h, engine.z, horizonY, rowH, city);
   if (fancy) {
     drawRoadHaze(ctx, city, w, horizonY, roadH);
     drawHighwaySpeedLines(ctx, w, h, speedRatio, engine.elapsedSeconds, horizonY + roadH * 0.2);
@@ -236,11 +238,14 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   for (const item of itemsFarToNear) {
     const dz = item.z - engine.z;
     if (dz < 1 || dz > HW_DRAW_DISTANCE) continue;
-    const y = horizonY + roadH * (HW_D0 / dz);
-    const idx = hwStrips.indexForY(y, h, rowH);
+    const t = tForDz(dz);
+    const y = horizonY + roadH * t;
+    const half = roadHalfWidth(t, w);
     const pulse = 1 + 0.08 * Math.sin(engine.elapsedSeconds * 6 + item.id);
-    const radius = HW_ITEM_RADIUS * hwStrips.halfWidth[idx] * pulse;
-    const cx = hwStrips.centerX[idx] + item.lx * hwStrips.halfWidth[idx];
+    const radius = HW_ITEM_RADIUS * half * pulse;
+    const cx = hwStrips.centerXAt(y, h, rowH) + item.lx * half;
+    ctx.save();
+    ctx.globalAlpha = fadeForDz(dz);
     const color = item.type === 'FUEL' ? FUEL_ITEM_COLOR : item.type === 'SHIELD' ? SHIELD_ITEM_COLOR : MAGNET_ITEM_COLOR;
     // A pickup must never be mistaken for a car: a pad ringed on the road, a halo, a white rim and
     // a gentle bob — none of which a vehicle or an obstacle has.
@@ -265,6 +270,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 1.1, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
   }
 
   // Traffic, far to near so closer cars paint over farther ones.
@@ -272,17 +278,20 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   for (const traffic of sorted) {
     const dz = traffic.z - engine.z;
     if (dz < 1 || dz > HW_DRAW_DISTANCE) continue;
-    const y = horizonY + roadH * (HW_D0 / dz);
-    const idx = hwStrips.indexForY(y, h, rowH);
-    const width = traffic.kind.halfWidth * 2 * hwStrips.halfWidth[idx];
-    const cx = hwStrips.centerX[idx] + traffic.lx * hwStrips.halfWidth[idx];
+    const t = tForDz(dz);
+    const y = horizonY + roadH * t;
+    const half = roadHalfWidth(t, w);
+    const width = traffic.kind.halfWidth * 2 * half;
+    const cx = hwStrips.centerXAt(y, h, rowH) + traffic.lx * half;
+    ctx.save();
+    ctx.globalAlpha = fadeForDz(dz);
     drawHighwayRearSprite(ctx, images[traffic.kind.sprite], cx, y, width, 0, traffic.kind.color);
+    ctx.restore();
   }
 
   // The player stays at the screen's horizontal center; the road slides under them.
   const playerY = horizonY + roadH * HW_PLAYER_T;
-  const playerIdx = hwStrips.indexForY(playerY, h, rowH);
-  const playerWidth = HW.PLAYER_DRAW_WIDTH * hwStrips.halfWidth[playerIdx];
+  const playerWidth = HW.PLAYER_DRAW_WIDTH * roadHalfWidth(HW_PLAYER_T, w);
   const playerImg = images[car.rearSprite];
   const playerHeight = playerImg && playerImg.naturalWidth ? playerWidth * playerImg.naturalHeight / playerImg.naturalWidth : playerWidth * 0.8;
   drawHighwayRearSprite(

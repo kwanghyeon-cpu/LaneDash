@@ -14,13 +14,13 @@ function loadApi() {
   const src = fs.readFileSync(path.join(jsDir, 'highway-engine.js'), 'utf8');
   const ctx = vm.createContext({ Math, console });
   vm.runInContext(
-    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll };',
+    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll, tForDz, dzForT, roadHalfWidth, fadeForDz, HW_PLAYER_T, HW_DRAW_DISTANCE, HW_FADE_DISTANCE };',
     ctx,
   );
   return ctx.__api;
 }
 
-const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll } = loadApi();
+const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll, tForDz, dzForT, roadHalfWidth, fadeForDz, HW_PLAYER_T, HW_DRAW_DISTANCE, HW_FADE_DISTANCE } = loadApi();
 
 /** Small seeded PRNG so every run is reproducible. */
 function mulberry32(seed) {
@@ -53,6 +53,46 @@ test('strips run from the bottom edge up to the horizon and shrink with distance
     assert.ok(s.halfWidth[i] < s.halfWidth[i - 1], 'road narrows with distance');
     assert.ok(s.dz[i] > s.dz[i - 1], 'depth grows');
   }
+});
+
+test('the projection is its own inverse and puts the car where it belongs', () => {
+  assert.ok(Math.abs(tForDz(HW_PLAYER_DZ) - HW_PLAYER_T) < 1e-4);
+  for (const dz of [1.3, 3, 9, 30, 60]) assert.ok(Math.abs(dzForT(tForDz(dz)) - dz) < 1e-3);
+  const s = strips();
+  for (let i = 0; i < s.count; i++) assert.ok(Math.abs(dzForT(tForDz(s.dz[i])) - s.dz[i]) < 1e-2);
+});
+
+test('the road nearly fills the screen at the car and keeps a width at the horizon', () => {
+  const atCar = roadHalfWidth(HW_PLAYER_T, W) * 2 / W;
+  assert.ok(atCar >= 0.92 && atCar <= 1.02, 'spans ' + atCar + ' of the width at the car');
+  const atHorizon = roadHalfWidth(0, W) * 2 / W;
+  assert.ok(atHorizon >= 0.25 && atHorizon <= 0.5, 'is ' + atHorizon + ' of the width at the horizon, not a point');
+});
+
+test('an approaching car moves smoothly down the screen', () => {
+  // At 60 fps and a closing speed of 24 u/s no frame may jump a car more than a few percent of the road height.
+  let dz = HW_DRAW_DISTANCE, worst = 0;
+  while (dz > HW_PLAYER_DZ) {
+    const next = Math.max(HW_PLAYER_DZ, dz - 24 / 60);
+    worst = Math.max(worst, tForDz(next) - tForDz(dz));
+    dz -= 24 / 60;
+  }
+  assert.ok(worst < 0.07, 'worst frame moves a car ' + worst + ' of the road height');
+});
+
+test('things fade in over the last stretch before the draw distance', () => {
+  assert.ok(Math.abs(fadeForDz(HW_DRAW_DISTANCE)) < 1e-4);
+  assert.ok(Math.abs(fadeForDz(HW_DRAW_DISTANCE - HW_FADE_DISTANCE) - 1) < 1e-4);
+  assert.equal(fadeForDz(5), 1);
+  const half = fadeForDz(HW_DRAW_DISTANCE - HW_FADE_DISTANCE / 2);
+  assert.ok(half > 0.4 && half < 0.6);
+});
+
+test('centerXAt interpolates between strips', () => {
+  const s = strips(100, 0.3);
+  const mid = s.yBottom[5] - ROW / 2;
+  assert.ok(Math.abs(s.centerXAt(mid, H, ROW) - s.centerX[5]) < 0.01);
+  assert.ok(Math.abs(s.centerXAt(mid - ROW / 2, H, ROW) - (s.centerX[5] + s.centerX[6]) / 2) < 0.01);
 });
 
 test('camera offset slides the whole road one half-width per unit', () => {

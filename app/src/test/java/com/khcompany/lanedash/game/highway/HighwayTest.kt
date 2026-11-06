@@ -40,6 +40,54 @@ class HighwayRoadTest {
     }
 
     @Test
+    fun projection_isItsOwnInverseAndPutsTheCarWhereItBelongs() {
+        assertEquals(HW_PLAYER_T, tForDz(HW_PLAYER_DZ), 1e-4f)
+        for (dz in listOf(1.3f, 3f, 9f, 30f, 60f)) assertEquals(dz, dzForT(tForDz(dz)), 1e-3f)
+        val s = strips()
+        for (i in 0 until s.count) assertEquals(s.dz[i], dzForT(tForDz(s.dz[i])), 1e-2f)
+    }
+
+    @Test
+    fun theRoadNearlyFillsTheScreenAtTheCarAndKeepsAWidthAtTheHorizon() {
+        val atCar = roadHalfWidth(HW_PLAYER_T, w) * 2f / w
+        assertTrue("the road spans ${atCar} of the width at the car", atCar in 0.92f..1.02f)
+        val atHorizon = roadHalfWidth(0f, w) * 2f / w
+        assertTrue("the road is ${atHorizon} of the width at the horizon, not a point", atHorizon in 0.25f..0.5f)
+    }
+
+    @Test
+    fun anApproachingCarMovesSmoothlyDownTheScreen() {
+        // At 60 fps and a closing speed of 24 u/s, no frame may jump a car more than a few percent of the
+        // road height (a plain 1/dz perspective jumps it by 20% in the last frames).
+        var dz = HW_DRAW_DISTANCE
+        var worst = 0f
+        while (dz > HW_PLAYER_DZ) {
+            val next = maxOf(HW_PLAYER_DZ, dz - 24f / 60f)
+            worst = maxOf(worst, tForDz(next) - tForDz(dz))
+            dz -= 24f / 60f
+        }
+        assertTrue("worst frame moves a car ${worst} of the road height", worst < 0.07f)
+    }
+
+    @Test
+    fun thingsFadeInOverTheLastStretchBeforeTheDrawDistance() {
+        assertEquals(0f, fadeForDz(HW_DRAW_DISTANCE), 1e-4f)
+        assertEquals(1f, fadeForDz(HW_DRAW_DISTANCE - HW_FADE_DISTANCE), 1e-4f)
+        assertEquals(1f, fadeForDz(5f), 1e-4f)
+        assertTrue(fadeForDz(HW_DRAW_DISTANCE - HW_FADE_DISTANCE / 2f) in 0.4f..0.6f)
+    }
+
+    @Test
+    fun centerXAt_interpolatesBetweenStrips() {
+        val s = strips(cameraX = 0.3f)
+        val rowH = 12f
+        // Exactly on a strip's middle it is that strip's center; halfway between two it is their average.
+        val mid = s.yBottom[5] - rowH / 2f
+        assertEquals(s.centerX[5], s.centerXAt(mid, h, rowH), 0.01f)
+        assertEquals((s.centerX[5] + s.centerX[6]) / 2f, s.centerXAt(mid - rowH / 2f, h, rowH), 0.01f)
+    }
+
+    @Test
     fun indexForY_mapsRowsToStripsAndClamps() {
         val s = strips()
         assertEquals(0, s.indexForY(h, h, 12f))

@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.khcompany.lanedash.game.highway.HW_D0
 import com.khcompany.lanedash.game.highway.HW_DRAW_DISTANCE
 import com.khcompany.lanedash.game.highway.RoadStrips
+import com.khcompany.lanedash.game.highway.roadHalfWidth
+import com.khcompany.lanedash.game.highway.tForDz
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
@@ -55,24 +57,26 @@ internal fun DrawScope.drawRoadside(
         val index = firstIndex + n
         val dz = index * ROADSIDE_SPACING - cameraZ
         if (dz < HW_D0 || dz > HW_DRAW_DISTANCE) continue
-        val y = horizonY + roadH * (HW_D0 / dz)
-        val i = strips.indexForY(y, size.height, rowHeight)
-        val hw = strips.halfWidth[i]
-        val cx = strips.centerX[i]
+        val t = tForDz(dz)
+        val y = horizonY + roadH * t
+        val hw = roadHalfWidth(t, size.width)
+        val cx = strips.centerXAt(y, size.height, rowHeight)
         val lampSide = if (index % 2 == 0) -1f else 1f
 
         val postW = maxOf(1f, hw * 0.035f)
-        val postH = hw * 1.5f
+        // Posts and bushes shrink with distance faster than the (wide) far road does.
+        val objScale = 0.35f + 0.65f * t
+        val postH = hw * 1.5f * objScale
         val lampX = cx + lampSide * LAMP_LATERAL * hw
         batch.posts.addRect(Rect(lampX - postW / 2f, y - postH, lampX + postW / 2f, y))
         // The arm reaches over the road, with the light at its tip.
         val armLen = hw * 0.26f
         val armEndX = lampX - lampSide * armLen
         batch.posts.addRect(Rect(minOf(lampX, armEndX), y - postH, maxOf(lampX, armEndX), y - postH + postW))
-        val lampW = hw * 0.11f
+        val lampW = hw * 0.11f * objScale
         batch.lamps.addRect(Rect(armEndX - lampW / 2f, y - postH + postW, armEndX + lampW / 2f, y - postH + postW * 2.2f))
 
-        val bushR = hw * 0.16f
+        val bushR = hw * 0.16f * objScale
         val bushX = cx - lampSide * BUSH_LATERAL * hw
         batch.bushes.addOval(Rect(bushX - bushR * 1.3f, y - bushR * 1.5f, bushX + bushR * 1.3f, y))
     }
