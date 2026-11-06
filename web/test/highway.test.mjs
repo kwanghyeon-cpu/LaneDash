@@ -62,6 +62,53 @@ test('the projection is its own inverse and puts the car where it belongs', () =
   for (let i = 0; i < s.count; i++) assert.ok(Math.abs(dzForT(tForDz(s.dz[i])) - s.dz[i]) < 1e-2);
 });
 
+test('the game keeps getting harder after the ramp: speed, fuel and standing obstacles', () => {
+  const eng = new HighwayEngine(() => {}, mulberry32(3));
+  eng.start();
+  let earlyTop = 0, lateTop = 0;
+  for (let tick = 0; tick < 300 * 20; tick++) { // 300 s ghost run: no obstacles in the way, kept fueled
+    eng.traffic.length = 0;
+    eng.items.length = 0;
+    if (eng.fuel < 50) eng.items.push({ id: -1, lx: eng.playerX, z: eng.z + HW_PLAYER_DZ + eng.speed * 0.05, type: 'FUEL' });
+    eng.tick(0.05);
+    if (tick === 100 * 20) earlyTop = eng.speed;
+    lateTop = Math.max(lateTop, eng.speed);
+  }
+  assert.ok(Math.abs(eng.late - 1) < 1e-4, 'late is full 270 s in');
+  assert.ok(earlyTop <= HW.MAX_SPEED, 'still at the early cap at 100 s: ' + earlyTop);
+  assert.ok(lateTop > HW.MAX_SPEED + HW.LATE_SPEED_BONUS * 0.8, 'late the top speed goes beyond it: ' + lateTop);
+});
+
+test('late in the run: more standing obstacles, and gates that always leave a lane open', () => {
+  let gates = 0, earlyStatic = 0, earlyTotal = 0, lateStatic = 0, lateTotal = 0;
+  for (let seed = 1; seed <= 8; seed++) {
+    const e = new HighwayEngine(() => {}, mulberry32(seed));
+    e.start();
+    const seen = new Set();
+    for (let tick = 0; tick < 20 * 330; tick++) { // 330 s ghost run: shielded and fueled
+      if (e.shieldTimeLeft < 1) e.items.push({ id: -2, lx: e.playerX, z: e.z + HW_PLAYER_DZ + e.speed * 0.05, type: 'SHIELD' });
+      if (e.fuel < 50) e.items.push({ id: -1, lx: e.playerX, z: e.z + HW_PLAYER_DZ + e.speed * 0.05, type: 'FUEL' });
+      e.tick(0.05);
+      const fresh = e.traffic.filter((c) => c.z - e.z > HW_DRAW_DISTANCE - 5 && !seen.has(seed * 100000 + c.id));
+      fresh.forEach((c) => seen.add(seed * 100000 + c.id));
+      const early = e.elapsedSeconds < 60, late = e.elapsedSeconds > 280;
+      for (const c of fresh) {
+        if (early) { earlyTotal++; if (c.speed === 0) earlyStatic++; }
+        if (late) { lateTotal++; if (c.speed === 0) lateStatic++; }
+      }
+      const row = new Set(fresh.filter((c) => c.speed === 0).map((c) => c.lx));
+      if (late && row.size >= 3) {
+        gates++;
+        assert.ok(row.size < HW_LANE_CENTERS.length, 'a gate always leaves a lane open');
+      }
+    }
+  }
+  const earlyShare = earlyStatic / earlyTotal, lateShare = lateStatic / lateTotal;
+  console.log('LATE static share early=' + earlyShare.toFixed(2) + ' late=' + lateShare.toFixed(2) + ', gates=' + gates);
+  assert.ok(lateShare > earlyShare + 0.2, 'standing obstacles are a bigger share late');
+  assert.ok(gates > 5, 'gates show up late: ' + gates);
+});
+
 test('the road nearly fills the screen at the car and keeps a width at the horizon', () => {
   const atCar = roadHalfWidth(HW_PLAYER_T, W) * 2 / W;
   assert.ok(atCar >= 0.92 && atCar <= 1.02, 'spans ' + atCar + ' of the width at the car');

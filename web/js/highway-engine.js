@@ -195,6 +195,21 @@ const HW = {
   SPAWN_EASY_INTERVAL: 0.9,
   SPAWN_HARD_INTERVAL: 0.35,
   SPAWN_RETRY_INTERVAL: 0.08,
+
+  // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
+  // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS (and a bit past it).
+  LATE_RAMP_SECONDS: 150,
+  /** Extra top speed at late = 1. */
+  LATE_SPEED_BONUS: 12,
+  /** Fraction cut from the spawn interval at late = 1. */
+  LATE_INTERVAL_CUT: 0.6,
+  /** Extra fuel drain per second at late = 1. */
+  LATE_FUEL_DRAIN: 1.5,
+  /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
+  GATE_CHANCE: 0.7,
+  /** Obstacles that are cones/barriers weigh this much more at late = 1 (moving traffic weighs less). */
+  LATE_STATIC_WEIGHT: 3.5,
+  LATE_MOVING_WEIGHT: 0.55,
   // Minimum seconds between two obstacles passing the player in the same lane, easy -> hard.
   SEPARATION_EASY: 0.5,
   SEPARATION_HARD: 0.22,
@@ -258,6 +273,7 @@ class HighwayEngine {
     this.fuelCollected = 0;
     this.fuelWarningPlayed = false;
     this.nearMissFlash = 0; // seconds left of the "NEAR MISS" flash
+    this.late = 0;
     this.elapsedSeconds = 0;
     this.heading = 0; // accumulated road heading; the renderer scrolls the skyline by it
     this.spawnCooldown = 1;
@@ -292,15 +308,18 @@ class HighwayEngine {
     // ramps up much faster, over DENSITY_RAMP_SECONDS, so the road fills early.
     const difficulty = Math.min(1, Math.max(0, this.elapsedSeconds / HW.RAMP_SECONDS));
     const density = Math.min(1, Math.max(0, this.elapsedSeconds / HW.DENSITY_RAMP_SECONDS));
+    // After the ramp the game keeps tightening: speed, traffic, static obstacles, gates and fuel use.
+    const late = Math.min(1, Math.max(0, (this.elapsedSeconds - HW.RAMP_SECONDS) / HW.LATE_RAMP_SECONDS));
+    this.late = late;
 
     // Speed: auto-accelerates toward a top speed that creeps up with difficulty.
-    const topSpeed = HW.EARLY_TOP_SPEED + (HW.MAX_SPEED - HW.EARLY_TOP_SPEED) * difficulty;
+    const topSpeed = HW.EARLY_TOP_SPEED + (HW.MAX_SPEED - HW.EARLY_TOP_SPEED) * difficulty + HW.LATE_SPEED_BONUS * late;
     this.speed = Math.min(topSpeed, this.speed + HW.ACCELERATION * dt);
     this.z += this.speed * dt;
     this.heading += curveAt(this.z) * this.speed * dt;
 
     // Fuel drains all the time; cans and near misses refill it.
-    this.fuel = Math.max(0, this.fuel - HW.FUEL_DRAIN_PER_SECOND * dt);
+    this.fuel = Math.max(0, this.fuel - (HW.FUEL_DRAIN_PER_SECOND + HW.LATE_FUEL_DRAIN * late) * dt);
     if (!this.fuelWarningPlayed && this.fuel <= HW.MAX_FUEL * 0.2) {
       this.fuelWarningPlayed = true;
       this.onSfx('FUEL_LOW_WARNING');
@@ -324,9 +343,9 @@ class HighwayEngine {
 
     this.spawnCooldown -= dt;
     if (this.spawnCooldown <= 0) {
-      this.spawnCooldown = this._spawnSomething(difficulty)
+      this.spawnCooldown = this._spawnSomething(difficulty, late)
         ? (HW.SPAWN_EASY_INTERVAL + (HW.SPAWN_HARD_INTERVAL - HW.SPAWN_EASY_INTERVAL) * density) *
-          (0.7 + 0.6 * this.random())
+          (1 - HW.LATE_INTERVAL_CUT * late) * (0.7 + 0.6 * this.random())
         : HW.SPAWN_RETRY_INTERVAL;
     }
 
@@ -422,7 +441,7 @@ class HighwayEngine {
    * One spawn event: mostly obstacles, sometimes a fuel can, rarely a
    * shield or magnet. Returns whether anything was added (a fair spot may not exist right now).
    */
-  _spawnSomething(difficulty) {
+  _spawnSomething(difficulty, late = 0) {
     // The roll sticks until it succeeds, so a crowded road doesn't keep re-rolling toward the
     // pickups (which always fit) and skew the mix.
     if (this.pendingRoll < 0) this.pendingRoll = this.random();
@@ -430,7 +449,7 @@ class HighwayEngine {
     let added;
     if (roll < HW.POWERUP_SPAWN_CHANCE) added = this._spawnItem(this.random() < 0.5 ? 'SHIELD' : 'MAGNET');
     else if (roll < HW.POWERUP_SPAWN_CHANCE + HW.ITEM_SPAWN_CHANCE) added = this._spawnItem('FUEL');
-    else added = this._spawnTraffic(difficulty);
+    else added = this.random() < HW.GATE_CHANCE * late ? this._spawnGate(difficulty, late) : this._spawnTraffic(difficulty, late);
     if (added) this.pendingRoll = -1;
     return added;
   }
@@ -452,16 +471,62 @@ class HighwayEngine {
     return false;
   }
 
+  /** The kind of the next obstacle: sedans and SUVs early; more cones and barriers (which stand still) later. */
+  _pickKind(late) {
+    const moving = 1 - (1 - HW.LATE_MOVING_WEIGHT) * late;
+    const still = 1 + (HW.LATE_STATIC_WEIGHT - 1) * late;
+    const weights = [
+      [TRAFFIC_KINDS.SEDAN, 6 * moving], [TRAFFIC_KINDS.SUV, 5 * moving], [TRAFFIC_KINDS.BUS, 2 * moving],
+      [TRAFFIC_KINDS.TRUCK, 2 * moving], [TRAFFIC_KINDS.CONE, 3 * still], [TRAFFIC_KINDS.BARRIER, 2 * still],
+    ];
+    let roll = this.random() * weights.reduce((sum, w) => sum + w[1], 0);
+    for (const [kind, weight] of weights) {
+      roll -= weight;
+      if (roll < 0) return kind;
+    }
+    return TRAFFIC_KINDS.BARRIER;
+  }
+
+  /**
+   * A gate: a row of cones/barriers across all lanes but one, all arriving together. The open lane is
+   * near the player (within two lanes) so it can always be reached in time, and it is kept free of other
+   * obstacles around that moment. The row gets wider (fewer open lanes) as `late` grows. Returns whether
+   * a gate was added.
+   */
+  _spawnGate(difficulty, late) {
+    const lanes = HW_LANE_CENTERS.length;
+    const blocked = Math.min(lanes - 1, 2 + Math.floor(late * 2.99));
+    const open = Math.min(lanes - 1, Math.max(0, this.laneIndex + Math.floor(this.random() * 5) - 2));
+    const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
+    const passIn = this._secondsUntilPassing(spawnZ, 0);
+    const openClear = !this.traffic.some((other) =>
+      !other.passed && laneIndexOf(other.lx) === open &&
+      Math.abs(this._secondsUntilPassing(other.z, other.speed) - passIn) < HW.SEPARATION_EASY + 0.4);
+    if (!openClear) return false;
+    // The blocked lanes: the ones nearest the open lane first, so the gate reads as one wall with a gap.
+    const order = HW_LANE_CENTERS.map((_, i) => i).filter((i) => i !== open)
+      .sort((a, b) => Math.abs(a - open) - Math.abs(b - open) || this.random() - 0.5).slice(0, blocked);
+    for (const lane of order) {
+      const fair = !this.traffic.some((other) =>
+        !other.passed &&
+        Math.abs(this._secondsUntilPassing(other.z, other.speed) - passIn) < requiredGapSeconds(Math.abs(lane - laneIndexOf(other.lx)), difficulty));
+      if (!fair) return false;
+    }
+    order.forEach((lane, i) => {
+      const kind = (i + lane) % 2 === 0 ? TRAFFIC_KINDS.BARRIER : TRAFFIC_KINDS.CONE;
+      this.traffic.push({ id: this.nextId++, lx: HW_LANE_CENTERS[lane], z: spawnZ, speed: 0, kind, passed: false });
+    });
+    return true;
+  }
+
   /**
    * Adds one obstacle, or none if no lane can take it fairly. Changing lanes takes time, so two
    * obstacles in different lanes must pass the player far enough apart for the move between them
    * (scaled with the lane distance) — otherwise random spawns create walls nobody can dodge. The
    * required gaps tighten as difficulty rises. Returns whether an obstacle was added.
    */
-  _spawnTraffic(difficulty) {
-    const pick = Math.floor(this.random() * 20);
-    const kind = pick <= 5 ? TRAFFIC_KINDS.SEDAN : pick <= 10 ? TRAFFIC_KINDS.SUV : pick <= 12 ? TRAFFIC_KINDS.BUS
-      : pick <= 14 ? TRAFFIC_KINDS.TRUCK : pick <= 17 ? TRAFFIC_KINDS.CONE : TRAFFIC_KINDS.BARRIER;
+  _spawnTraffic(difficulty, late = 0) {
+    const kind = this._pickKind(late);
     const carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * this.random();
     const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
     const passIn = this._secondsUntilPassing(spawnZ, carSpeed);

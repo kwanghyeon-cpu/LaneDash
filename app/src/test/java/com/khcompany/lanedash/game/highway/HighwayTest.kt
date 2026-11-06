@@ -423,6 +423,62 @@ class HighwayEngineTest {
     }
 
     @Test
+    fun theGameKeepsGettingHarderAfterTheRamp_speedFuelAndStandingObstacles() {
+        // A ghost run (no obstacles in the way, kept fueled) to see what the clock alone does.
+        var earlyTop = 0f
+        var lateTop = 0f
+        repeat(300 * 20) { tick -> // 300 s
+            engine.traffic.clear()
+            engine.items.clear()
+            keepFueled(0.05f)
+            engine.tick(0.05f)
+            if (tick == 100 * 20) earlyTop = engine.speed
+            lateTop = maxOf(lateTop, engine.speed)
+        }
+        assertEquals("late is full 270 s in", 1f, engine.late, 1e-4f)
+        assertTrue("100 s in the speed is still at the early cap (" + earlyTop + ")", earlyTop <= HighwayEngine.MAX_SPEED)
+        assertTrue("late the top speed goes beyond it (" + lateTop + ")", lateTop > HighwayEngine.MAX_SPEED + HighwayEngine.LATE_SPEED_BONUS * 0.8f)
+        assertTrue("late is 0 before the ramp ends", HighwayEngine().also { it.start(); repeat(100) { _ -> it.tick(0.05f) } }.late == 0f)
+    }
+
+    @Test
+    fun lateInTheRun_moreStandingObstaclesAndGatesWithOneOpenLane() {
+        var gates = 0
+        var lateStatic = 0
+        var lateTotal = 0
+        var earlyStatic = 0
+        var earlyTotal = 0
+        for (seed in 1..8) {
+            val e = HighwayEngine(random = Random(seed))
+            e.start()
+            val seen = HashSet<Long>()
+            for (tick in 0 until 20 * 330) { // 330 s, ghost: shielded and fueled
+                if (e.shieldTimeLeft < 1f) addItem(ItemType.SHIELD, e.playerX, e.speed * 0.05f, e)
+                if (e.fuel < 50f) addItem(ItemType.FUEL, e.playerX, e.speed * 0.05f, e)
+                e.tick(0.05f)
+                val newCars = e.traffic.filter { it.id >= 0 && it.z - e.z > HW_DRAW_DISTANCE - 5f && seen.add(seed * 100000L + it.id) }
+                val early = e.elapsedSeconds < 60f
+                val late = e.elapsedSeconds > 280f
+                for (c in newCars) {
+                    if (early) { earlyTotal++; if (c.speed == 0f) earlyStatic++ }
+                    if (late) { lateTotal++; if (c.speed == 0f) lateStatic++ }
+                }
+                // A gate: the newest standing obstacles side by side at the same depth, leaving a lane open.
+                val row = newCars.filter { it.speed == 0f }.map { it.lx }.toSet()
+                if (late && row.size >= 3) {
+                    gates++
+                    assertTrue("a gate always leaves a lane open (" + row.size + " blocked)", row.size < HW_LANE_COUNT)
+                }
+            }
+        }
+        val earlyShare = earlyStatic.toFloat() / earlyTotal
+        val lateShare = lateStatic.toFloat() / lateTotal
+        println("LATE static share early=" + earlyShare + " late=" + lateShare + ", gates=" + gates)
+        assertTrue("standing obstacles are a bigger share late ($earlyShare -> $lateShare)", lateShare > earlyShare + 0.2f)
+        assertTrue("gates show up late ($gates)", gates > 5)
+    }
+
+    @Test
     fun startsRunningAndAcceleratesForward() {
         assertEquals(GameStatus.RUNNING, engine.status)
         repeat(20) { engine.tick(0.05f) }

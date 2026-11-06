@@ -109,6 +109,10 @@ class HighwayEngine(
     var magnetTimeLeft by mutableFloatStateOf(0f)
         private set
 
+    /** 0 until [RAMP_SECONDS], then climbs to 1 over [LATE_RAMP_SECONDS]: how deep into the late game the run is. */
+    var late by mutableFloatStateOf(0f)
+        private set
+
     /** Obstacles passed at close range this run (each awards a score + fuel bonus). */
     var nearMissCount by mutableIntStateOf(0)
         private set
@@ -158,6 +162,7 @@ class HighwayEngine(
         fuelWarningPlayed = false
         nearMissFlash = 0f
         elapsedSeconds = 0f
+        late = 0f
         heading = 0f
         spawnCooldown = 1f
         pendingRoll = -1f
@@ -207,15 +212,17 @@ class HighwayEngine(
         // density ramps up much faster, over DENSITY_RAMP_SECONDS, so the road fills early.
         val difficulty = (elapsedSeconds / RAMP_SECONDS).coerceIn(0f, 1f)
         val density = (elapsedSeconds / DENSITY_RAMP_SECONDS).coerceIn(0f, 1f)
+        // After the ramp the game keeps tightening: speed, traffic, static obstacles, gates and fuel use.
+        late = ((elapsedSeconds - RAMP_SECONDS) / LATE_RAMP_SECONDS).coerceIn(0f, 1f)
 
         // Speed: auto-accelerates toward a top speed that creeps up with difficulty.
-        val topSpeed = EARLY_TOP_SPEED + (MAX_SPEED - EARLY_TOP_SPEED) * difficulty
+        val topSpeed = EARLY_TOP_SPEED + (MAX_SPEED - EARLY_TOP_SPEED) * difficulty + LATE_SPEED_BONUS * late
         speed = minOf(topSpeed, speed + ACCELERATION * dt)
         z += speed * dt
         heading += curveAt(z) * speed * dt
 
         // Fuel drains all the time; cans and near misses refill it.
-        fuel = (fuel - FUEL_DRAIN_PER_SECOND * dt).coerceAtLeast(0f)
+        fuel = (fuel - (FUEL_DRAIN_PER_SECOND + LATE_FUEL_DRAIN * late) * dt).coerceAtLeast(0f)
         if (!fuelWarningPlayed && fuel <= MAX_FUEL * 0.2f) {
             fuelWarningPlayed = true
             onSfx(SfxEvent.FUEL_LOW_WARNING)
@@ -239,9 +246,9 @@ class HighwayEngine(
 
         spawnCooldown -= dt
         if (spawnCooldown <= 0f) {
-            spawnCooldown = if (spawnSomething(difficulty)) {
+            spawnCooldown = if (spawnSomething(difficulty, late)) {
                 (SPAWN_EASY_INTERVAL + (SPAWN_HARD_INTERVAL - SPAWN_EASY_INTERVAL) * density) *
-                    (0.7f + 0.6f * random.nextFloat())
+                    (1f - LATE_INTERVAL_CUT * late) * (0.7f + 0.6f * random.nextFloat())
             } else {
                 SPAWN_RETRY_INTERVAL
             }
@@ -338,7 +345,7 @@ class HighwayEngine(
      * One spawn event: mostly obstacles, sometimes a fuel can, rarely a
      * shield or magnet. Returns whether anything was added (a fair spot may not exist right now).
      */
-    private fun spawnSomething(difficulty: Float): Boolean {
+    private fun spawnSomething(difficulty: Float, late: Float): Boolean {
         // The roll sticks until it succeeds, so a crowded road doesn't keep re-rolling toward the
         // pickups (which always fit) and skew the mix.
         if (pendingRoll < 0f) pendingRoll = random.nextFloat()
@@ -346,7 +353,8 @@ class HighwayEngine(
         val added = when {
             roll < POWERUP_SPAWN_CHANCE -> spawnItem(if (random.nextBoolean()) ItemType.SHIELD else ItemType.MAGNET)
             roll < POWERUP_SPAWN_CHANCE + ITEM_SPAWN_CHANCE -> spawnItem(ItemType.FUEL)
-            else -> spawnTraffic(difficulty)
+            random.nextFloat() < GATE_CHANCE * late -> spawnGate(difficulty, late)
+            else -> spawnTraffic(difficulty, late)
         }
         if (added) pendingRoll = -1f
         return added
@@ -368,21 +376,65 @@ class HighwayEngine(
         return false
     }
 
+    /** The kind of the next obstacle: sedans and SUVs early; more cones and barriers (which stand still) later. */
+    private fun pickKind(late: Float): TrafficKind {
+        val moving = 1f - (1f - LATE_MOVING_WEIGHT) * late
+        val still = 1f + (LATE_STATIC_WEIGHT - 1f) * late
+        val weights = listOf(
+            TrafficKind.SEDAN to 6f * moving, TrafficKind.SUV to 5f * moving, TrafficKind.BUS to 2f * moving,
+            TrafficKind.TRUCK to 2f * moving, TrafficKind.CONE to 3f * still, TrafficKind.BARRIER to 2f * still,
+        )
+        var roll = random.nextFloat() * weights.sumOf { it.second.toDouble() }.toFloat()
+        for ((kind, weight) in weights) {
+            roll -= weight
+            if (roll < 0f) return kind
+        }
+        return TrafficKind.BARRIER
+    }
+
+    /**
+     * A gate: a row of cones/barriers across all lanes but one, all arriving together. The open lane is
+     * near the player (within two lanes) so it can always be reached in time, and it is kept free of other
+     * obstacles around that moment. The row gets wider (fewer open lanes) as [late] grows. Returns whether
+     * a gate was added.
+     */
+    private fun spawnGate(difficulty: Float, late: Float): Boolean {
+        val lanes = HW_LANE_CENTERS.size
+        val blocked = minOf(lanes - 1, 2 + (late * 2.99f).toInt())
+        val open = (laneIndex + random.nextInt(5) - 2).coerceIn(0, lanes - 1)
+        val spawnZ = z + HW_DRAW_DISTANCE - 1f
+        val passIn = secondsUntilPassing(spawnZ, 0f)
+        val openClear = traffic.none { other ->
+            !other.passed && laneOf(other.lx) == open &&
+                abs(secondsUntilPassing(other.z, other.speed) - passIn) < SEPARATION_EASY + 0.4f
+        }
+        if (!openClear) return false
+        // The blocked lanes: the ones nearest the open lane first, so the gate reads as one wall with a gap.
+        val order = (0 until lanes).filter { it != open }
+            .sortedWith(compareBy<Int> { abs(it - open) }.thenBy { random.nextFloat() })
+            .take(blocked)
+        for (lane in order) {
+            val fair = traffic.none { other ->
+                !other.passed &&
+                    abs(secondsUntilPassing(other.z, other.speed) - passIn) < requiredGapSeconds(abs(lane - laneOf(other.lx)), difficulty)
+            }
+            if (!fair) return false
+        }
+        order.forEachIndexed { i, lane ->
+            val kind = if ((i + lane) % 2 == 0) TrafficKind.BARRIER else TrafficKind.CONE
+            traffic.add(TrafficCar(nextId++, HW_LANE_CENTERS[lane], spawnZ, 0f, kind))
+        }
+        return true
+    }
+
     /**
      * Adds one obstacle, or none if no lane can take it fairly. Changing lanes takes time, so two
      * obstacles in different lanes must pass the player far enough apart for the move between them
      * (scaled with the lane distance) — otherwise random spawns create walls nobody can dodge. The
      * required gaps tighten as [difficulty] rises. Returns whether an obstacle was added.
      */
-    private fun spawnTraffic(difficulty: Float): Boolean {
-        val kind = when (random.nextInt(20)) {
-            in 0..5 -> TrafficKind.SEDAN
-            in 6..10 -> TrafficKind.SUV
-            in 11..12 -> TrafficKind.BUS
-            in 13..14 -> TrafficKind.TRUCK
-            in 15..17 -> TrafficKind.CONE
-            else -> TrafficKind.BARRIER
-        }
+    private fun spawnTraffic(difficulty: Float, late: Float): Boolean {
+        val kind = pickKind(late)
         val carSpeed = kind.minSpeed + (kind.maxSpeed - kind.minSpeed) * random.nextFloat()
         val spawnZ = z + HW_DRAW_DISTANCE - 1f
         val passIn = secondsUntilPassing(spawnZ, carSpeed)
@@ -459,6 +511,26 @@ class HighwayEngine(
         const val SPAWN_EASY_INTERVAL = 0.9f
         const val SPAWN_HARD_INTERVAL = 0.35f
         const val SPAWN_RETRY_INTERVAL = 0.08f
+
+        // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
+        // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS.
+        const val LATE_RAMP_SECONDS = 150f
+
+        /** Extra top speed at late = 1. */
+        const val LATE_SPEED_BONUS = 12f
+
+        /** Fraction cut from the spawn interval at late = 1. */
+        const val LATE_INTERVAL_CUT = 0.6f
+
+        /** Extra fuel drain per second at late = 1. */
+        const val LATE_FUEL_DRAIN = 1.5f
+
+        /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
+        const val GATE_CHANCE = 0.7f
+
+        /** Cones and barriers weigh this much more at late = 1 (moving traffic weighs less). */
+        const val LATE_STATIC_WEIGHT = 3.5f
+        const val LATE_MOVING_WEIGHT = 0.55f
 
         /** Minimum seconds between two obstacles passing the player in the same lane, easy -> hard. */
         const val SEPARATION_EASY = 0.5f
