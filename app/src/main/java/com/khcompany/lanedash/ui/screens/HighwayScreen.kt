@@ -120,6 +120,9 @@ private const val VIGNETTE_MAX_ALPHA = 0.5f
 /** The left/right lane buttons are big: they are the main controls, tapped constantly. */
 private val LANE_BUTTON_SIZE = 84.dp
 
+/** How long the "LEVEL UP" notice stays up when the late game begins. */
+private const val LEVEL_UP_SECONDS = 3f
+
 /** Pickup badge radius, in road half-widths at the same depth. */
 private const val ITEM_RADIUS = 0.17f
 private val ROAD_GRASS = Color(0xFF2E7D32)
@@ -672,6 +675,19 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 150.dp)
                     .alpha((engine.nearMissFlash / HighwayEngine.NEAR_MISS_FLASH_SECONDS * 1.6f).coerceIn(0f, 1f)),
+            )
+        }
+        // The late game starts: a short notice that things are about to speed up.
+        val sinceLate = engine.elapsedSeconds - HighwayEngine.RAMP_SECONDS
+        if (engine.status == GameStatus.RUNNING && sinceLate in 0f..LEVEL_UP_SECONDS) {
+            Text(
+                text = "LEVEL UP!  더 빨라져요",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 150.dp)
+                    .alpha((1f - sinceLate / LEVEL_UP_SECONDS).coerceIn(0f, 1f)),
             )
         }
         if (engine.status == GameStatus.RUNNING && engine.elapsedSeconds < 4f) {

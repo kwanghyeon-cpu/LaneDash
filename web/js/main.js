@@ -242,6 +242,7 @@ let engine = null;
 let lastFrameTime = 0;
 let rafId = null;
 let lastNearMissCount = 0;
+let lateToastShown = false;
 
 function startGame() {
   document.querySelector('.controls-hint').style.opacity = '';
@@ -255,6 +256,7 @@ function startGame() {
   });
   engine.start();
   lastNearMissCount = 0;
+  lateToastShown = false;
   audio.startBgm();
 
   lastFrameTime = performance.now();
@@ -306,6 +308,10 @@ function updateHud() {
   fuelBar.style.background = fuelPct > 50 ? '#4CAF50' : fuelPct > 20 ? '#FFC93C' : '#E63946';
   if (engine.nearMissCount > lastNearMissCount) showToast(`NEAR MISS!  +${HW.NEAR_MISS_SCORE}`);
   lastNearMissCount = engine.nearMissCount;
+  if (!lateToastShown && engine.late > 0) {
+    lateToastShown = true;
+    showToast('LEVEL UP!  더 빨라져요');
+  }
   document.getElementById('btn-pause').classList.toggle('hidden', engine.status !== 'RUNNING' || engine.paused);
   document.getElementById('pause-overlay').classList.toggle('hidden', !(engine.status === 'RUNNING' && engine.paused));
   document.getElementById('hud-score').textContent = `SCORE ${engine.score}`;
@@ -408,6 +414,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 function restartRun() {
   engine.start();
   lastNearMissCount = 0;
+  lateToastShown = false;
   lastFrameTime = performance.now();
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(loop);
