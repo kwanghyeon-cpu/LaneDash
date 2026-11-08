@@ -109,7 +109,7 @@ class HighwayEngine(
     var magnetTimeLeft by mutableFloatStateOf(0f)
         private set
 
-    /** 0 until [RAMP_SECONDS], then climbs to 1 over [LATE_RAMP_SECONDS]: how deep into the late game the run is. */
+    /** 0 until [LATE_START_SECONDS], then climbs to 1 over [LATE_RAMP_SECONDS]: how deep into the late game the run is. */
     var late by mutableFloatStateOf(0f)
         private set
 
@@ -213,7 +213,7 @@ class HighwayEngine(
         val difficulty = (elapsedSeconds / RAMP_SECONDS).coerceIn(0f, 1f)
         val density = (elapsedSeconds / DENSITY_RAMP_SECONDS).coerceIn(0f, 1f)
         // After the ramp the game keeps tightening: speed, traffic, static obstacles, gates and fuel use.
-        late = ((elapsedSeconds - RAMP_SECONDS) / LATE_RAMP_SECONDS).coerceIn(0f, 1f)
+        late = ((elapsedSeconds - LATE_START_SECONDS) / LATE_RAMP_SECONDS).coerceIn(0f, 1f)
 
         // Speed: auto-accelerates toward a top speed that creeps up with difficulty.
         val topSpeed = EARLY_TOP_SPEED + (MAX_SPEED - EARLY_TOP_SPEED) * difficulty + LATE_SPEED_BONUS * late
@@ -514,22 +514,24 @@ class HighwayEngine(
 
         // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
         // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS.
-        const val LATE_RAMP_SECONDS = 150f
+        /** When the late game starts, and how long it takes to reach full strength. */
+        const val LATE_START_SECONDS = 100f
+        const val LATE_RAMP_SECONDS = 120f
 
         /** Extra top speed at late = 1. */
-        const val LATE_SPEED_BONUS = 12f
+        const val LATE_SPEED_BONUS = 16f
 
         /** Fraction cut from the spawn interval at late = 1. */
-        const val LATE_INTERVAL_CUT = 0.6f
+        const val LATE_INTERVAL_CUT = 0.65f
 
         /** Extra fuel drain per second at late = 1. */
-        const val LATE_FUEL_DRAIN = 1.5f
+        const val LATE_FUEL_DRAIN = 1.2f
 
         /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
-        const val GATE_CHANCE = 0.7f
+        const val GATE_CHANCE = 0.8f
 
         /** Cones and barriers weigh this much more at late = 1 (moving traffic weighs less). */
-        const val LATE_STATIC_WEIGHT = 3.5f
+        const val LATE_STATIC_WEIGHT = 4f
         const val LATE_MOVING_WEIGHT = 0.55f
 
         /** Minimum seconds between two obstacles passing the player in the same lane, easy -> hard. */

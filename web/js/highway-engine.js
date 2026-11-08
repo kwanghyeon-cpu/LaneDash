@@ -66,7 +66,8 @@ class RoadStrips {
     this.count = 0;
     this.yTop = new Float32Array(capacity);
     this.yBottom = new Float32Array(capacity);
-    /** Screen x of the road's center line in this strip (curve and camera offset applied). */
+    /** Screen x of the road's center line in this strip. The bottom strip is always dead center (the road does not
+     * slide when the car changes lanes); a bend only shows further up. */
     this.centerX = new Float32Array(capacity);
     /** Screen pixels per road half-width in this strip. */
     this.halfWidth = new Float32Array(capacity);
@@ -75,13 +76,14 @@ class RoadStrips {
     this.band = new Uint8Array(capacity);
   }
 
-  compute(cameraZ, cameraX, screenWidth, horizonY, bottomY, rowHeight, stripeLength) {
+  compute(cameraZ, screenWidth, horizonY, bottomY, rowHeight, stripeLength) {
     const roadHeight = bottomY - horizonY;
     const hw0 = screenWidth * 0.5;
     let n = 0;
     let prevDz = 0;
     let dxAcc = 0;
     let xOff = 0;
+    let bendAtBottom = 0;
     let y = bottomY;
     while (n < this.capacity && y - rowHeight > horizonY + 1) {
       const t = ((y - rowHeight / 2) - horizonY) / roadHeight;
@@ -98,7 +100,9 @@ class RoadStrips {
       this.yBottom[n] = y;
       this.yTop[n] = y - rowHeight;
       this.halfWidth[n] = roadHalfWidth(t, screenWidth);
-      this.centerX[n] = screenWidth / 2 + xOff * hw0 * t - cameraX * this.halfWidth[n];
+      const bend = xOff * hw0 * t;
+      if (n === 0) bendAtBottom = bend;
+      this.centerX[n] = screenWidth / 2 + bend - bendAtBottom;
       this.dz[n] = d;
       this.band[n] = Math.floor((cameraZ + d) / stripeLength) & 1;
       n++;
@@ -198,17 +202,19 @@ const HW = {
 
   // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
   // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS (and a bit past it).
-  LATE_RAMP_SECONDS: 150,
+  /** When the late game starts, and how long it takes to reach full strength. */
+  LATE_START_SECONDS: 100,
+  LATE_RAMP_SECONDS: 120,
   /** Extra top speed at late = 1. */
-  LATE_SPEED_BONUS: 12,
+  LATE_SPEED_BONUS: 16,
   /** Fraction cut from the spawn interval at late = 1. */
-  LATE_INTERVAL_CUT: 0.6,
+  LATE_INTERVAL_CUT: 0.65,
   /** Extra fuel drain per second at late = 1. */
-  LATE_FUEL_DRAIN: 1.5,
+  LATE_FUEL_DRAIN: 1.2,
   /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
-  GATE_CHANCE: 0.7,
+  GATE_CHANCE: 0.8,
   /** Obstacles that are cones/barriers weigh this much more at late = 1 (moving traffic weighs less). */
-  LATE_STATIC_WEIGHT: 3.5,
+  LATE_STATIC_WEIGHT: 4,
   LATE_MOVING_WEIGHT: 0.55,
   // Minimum seconds between two obstacles passing the player in the same lane, easy -> hard.
   SEPARATION_EASY: 0.5,
@@ -309,7 +315,7 @@ class HighwayEngine {
     const difficulty = Math.min(1, Math.max(0, this.elapsedSeconds / HW.RAMP_SECONDS));
     const density = Math.min(1, Math.max(0, this.elapsedSeconds / HW.DENSITY_RAMP_SECONDS));
     // After the ramp the game keeps tightening: speed, traffic, static obstacles, gates and fuel use.
-    const late = Math.min(1, Math.max(0, (this.elapsedSeconds - HW.RAMP_SECONDS) / HW.LATE_RAMP_SECONDS));
+    const late = Math.min(1, Math.max(0, (this.elapsedSeconds - HW.LATE_START_SECONDS) / HW.LATE_RAMP_SECONDS));
     this.late = late;
 
     // Speed: auto-accelerates toward a top speed that creeps up with difficulty.

@@ -37,9 +37,9 @@ function mulberry32(seed) {
 // ---------- road ----------
 const W = 1080, H = 2220, ROW = 12;
 const horizon = H * HW_HORIZON_FRACTION;
-function strips(cameraZ = 100, cameraX = 0) {
+function strips(cameraZ = 100) {
   const s = new RoadStrips();
-  s.compute(cameraZ, cameraX, W, horizon, H, ROW, 4);
+  s.compute(cameraZ, W, horizon, H, ROW, 4);
   return s;
 }
 
@@ -74,7 +74,7 @@ test('the game keeps getting harder after the ramp: speed, fuel and standing obs
     if (tick === 100 * 20) earlyTop = eng.speed;
     lateTop = Math.max(lateTop, eng.speed);
   }
-  assert.ok(Math.abs(eng.late - 1) < 1e-4, 'late is full 270 s in');
+  assert.ok(Math.abs(eng.late - 1) < 1e-4, 'late is full 220 s in');
   assert.ok(earlyTop <= HW.MAX_SPEED, 'still at the early cap at 100 s: ' + earlyTop);
   assert.ok(lateTop > HW.MAX_SPEED + HW.LATE_SPEED_BONUS * 0.8, 'late the top speed goes beyond it: ' + lateTop);
 });
@@ -136,16 +136,20 @@ test('things fade in over the last stretch before the draw distance', () => {
 });
 
 test('centerXAt interpolates between strips', () => {
-  const s = strips(100, 0.3);
+  const s = strips(130);
   const mid = s.yBottom[5] - ROW / 2;
   assert.ok(Math.abs(s.centerXAt(mid, H, ROW) - s.centerX[5]) < 0.01);
   assert.ok(Math.abs(s.centerXAt(mid - ROW / 2, H, ROW) - (s.centerX[5] + s.centerX[6]) / 2) < 0.01);
 });
 
-test('camera offset slides the whole road one half-width per unit', () => {
-  const a = strips(100, 0);
-  const b = strips(100, 1);
-  for (let i = 0; i < a.count; i++) assert.ok(Math.abs(a.centerX[i] - a.halfWidth[i] - b.centerX[i]) < 0.05);
+test('the bottom of the road stays fixed whatever the bend', () => {
+  let widest = 0;
+  for (let z = 0; z < 3000; z += 7) {
+    const s = strips(z);
+    assert.ok(Math.abs(s.centerX[0] - W / 2) < 0.001, 'bottom strip centered at z=' + z);
+    widest = Math.max(widest, Math.abs(s.centerX[s.count - 1] - W / 2));
+  }
+  assert.ok(widest > 40, 'the bend still shows at the far end: ' + widest);
 });
 
 test('indexForY maps rows to strips and clamps', () => {

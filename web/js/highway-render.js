@@ -169,7 +169,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   ctx.translate(-w / 2, -h / 2);
 
   // The road first: the skyline reads its bend (see skylineScroll).
-  hwStrips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, HW_STRIPE_LENGTH);
+  hwStrips.compute(engine.z, w, horizonY, h, rowH, HW_STRIPE_LENGTH);
   const drewSky = drawCitySkylineSprite(ctx, images[city.sprite], w, horizonY, skylineScroll(hwStrips, w), 1);
   if (!drewSky) {
     const grad = ctx.createLinearGradient(0, 0, 0, horizonY);
@@ -289,23 +289,25 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     ctx.restore();
   }
 
-  // The player stays at the screen's horizontal center; the road slides under them.
+  // The road is fixed at the bottom of the screen: the car moves across it.
   const playerY = horizonY + roadH * HW_PLAYER_T;
-  const playerWidth = HW.PLAYER_DRAW_WIDTH * roadHalfWidth(HW_PLAYER_T, w);
+  const playerHalf = roadHalfWidth(HW_PLAYER_T, w);
+  const playerCx = hwStrips.centerXAt(playerY, h, rowH) + engine.playerX * playerHalf;
+  const playerWidth = HW.PLAYER_DRAW_WIDTH * playerHalf;
   const playerImg = images[car.rearSprite];
   const playerHeight = playerImg && playerImg.naturalWidth ? playerWidth * playerImg.naturalHeight / playerImg.naturalWidth : playerWidth * 0.8;
   drawHighwayRearSprite(
-    ctx, playerImg, w / 2, playerY, playerWidth,
+    ctx, playerImg, playerCx, playerY, playerWidth,
     engine.steerLean * HW_MAX_LEAN_DEGREES * Math.PI / 180, '#E63946',
   );
   // Power-up effects around the car.
   const bodyY = playerY - playerHeight / 2;
-  if (engine.magnetTimeLeft > 0) drawMagnetAura(ctx, w / 2, bodyY, playerWidth * 0.62, playerHeight * 0.95, engine.elapsedSeconds * 60);
+  if (engine.magnetTimeLeft > 0) drawMagnetAura(ctx, playerCx, bodyY, playerWidth * 0.62, playerHeight * 0.95, engine.elapsedSeconds * 60);
   if (engine.shieldTimeLeft > 0) {
     // Blinks during the last 1.5 s so you see it about to run out.
     const ending = engine.shieldTimeLeft < 1.5;
     const alpha = ending && Math.floor(engine.shieldTimeLeft * 8) % 2 === 0 ? 0.3 : 1;
-    drawShieldBubble(ctx, w / 2, bodyY, playerWidth * 0.58, playerHeight * 0.85, alpha);
+    drawShieldBubble(ctx, playerCx, bodyY, playerWidth * 0.58, playerHeight * 0.85, alpha);
   }
 
   ctx.restore();

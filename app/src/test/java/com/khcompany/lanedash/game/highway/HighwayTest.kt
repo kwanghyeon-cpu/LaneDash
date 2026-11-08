@@ -16,8 +16,8 @@ class HighwayRoadTest {
     private val h = 2220f
     private val horizon = h * HW_HORIZON_FRACTION
 
-    private fun strips(cameraZ: Float = 100f, cameraX: Float = 0f): RoadStrips =
-        RoadStrips().also { it.compute(cameraZ, cameraX, w, horizon, h, 12f, 4f) }
+    private fun strips(cameraZ: Float = 100f): RoadStrips =
+        RoadStrips().also { it.compute(cameraZ, w, horizon, h, 12f, 4f) }
 
     @Test
     fun strips_runFromBottomEdgeUpToHorizonAndShrinkWithDistance() {
@@ -33,10 +33,18 @@ class HighwayRoadTest {
     }
 
     @Test
-    fun cameraOffset_slidesTheWholeRoadOneHalfWidthPerUnit() {
-        val a = strips(cameraX = 0f)
-        val b = strips(cameraX = 1f)
-        for (i in 0 until a.count) assertEquals(a.centerX[i] - a.halfWidth[i], b.centerX[i], 0.01f)
+    fun theBottomOfTheRoadStaysFixedWhateverTheBend() {
+        // However the road bends at this point of the run, the bottom strip is centered at full width.
+        var z = 0f
+        var widest = 0f
+        while (z < 3000f) {
+            val s = strips(cameraZ = z)
+            assertEquals("bottom strip centered at z=" + z, w / 2f, s.centerX[0], 0.001f)
+            assertTrue("bottom strip is wider than half the screen", s.halfWidth[0] > w * 0.5f)
+            widest = maxOf(widest, abs(s.centerX[s.count - 1] - w / 2f))
+            z += 7f
+        }
+        assertTrue("the bend still shows at the far end (" + widest + " px)", widest > 40f)
     }
 
     @Test
@@ -79,7 +87,7 @@ class HighwayRoadTest {
 
     @Test
     fun centerXAt_interpolatesBetweenStrips() {
-        val s = strips(cameraX = 0.3f)
+        val s = strips(cameraZ = 130f)
         val rowH = 12f
         // Exactly on a strip's middle it is that strip's center; halfway between two it is their average.
         val mid = s.yBottom[5] - rowH / 2f
@@ -435,7 +443,7 @@ class HighwayEngineTest {
             if (tick == 100 * 20) earlyTop = engine.speed
             lateTop = maxOf(lateTop, engine.speed)
         }
-        assertEquals("late is full 270 s in", 1f, engine.late, 1e-4f)
+        assertEquals("late is full 220 s in", 1f, engine.late, 1e-4f)
         assertTrue("100 s in the speed is still at the early cap (" + earlyTop + ")", earlyTop <= HighwayEngine.MAX_SPEED)
         assertTrue("late the top speed goes beyond it (" + lateTop + ")", lateTop > HighwayEngine.MAX_SPEED + HighwayEngine.LATE_SPEED_BONUS * 0.8f)
         assertTrue("late is 0 before the ramp ends", HighwayEngine().also { it.start(); repeat(100) { _ -> it.tick(0.05f) } }.late == 0f)

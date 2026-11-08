@@ -247,7 +247,7 @@ fun HighwayScreen(
             val rowH = max(3f, roadH / 110f)
 
             // The road first: the skyline reads its bend (see skylineScroll).
-            strips.compute(engine.z, engine.playerX, w, horizonY, h, rowH, STRIPE_LENGTH)
+            strips.compute(engine.z, w, horizonY, h, rowH, STRIPE_LENGTH)
 
             val sky = skyline
             if (sky != null) {
@@ -372,22 +372,24 @@ fun HighwayScreen(
                 }
             }
 
-            // The player stays at the screen's horizontal center; the road slides under them.
             val playerY = horizonY + roadH * HW_PLAYER_T
-            val playerWidth = HighwayEngine.PLAYER_DRAW_WIDTH * roadHalfWidth(HW_PLAYER_T, w)
+            // The road is fixed at the bottom of the screen: the car moves across it.
+            val playerHalf = roadHalfWidth(HW_PLAYER_T, w)
+            val playerCx = strips.centerXAt(playerY, h, rowH) + engine.playerX * playerHalf
+            val playerWidth = HighwayEngine.PLAYER_DRAW_WIDTH * playerHalf
             val sprite = playerSprite
             val playerHeight = if (sprite != null) playerWidth * sprite.height / sprite.width else playerWidth * 0.8f
             if (sprite != null) {
                 drawRearSprite(
                     sprite,
-                    cx = w / 2f,
+                    cx = playerCx,
                     bottomY = playerY,
                     width = playerWidth,
                     leanDegrees = engine.steerLean * MAX_LEAN_DEGREES,
                 )
             } else {
                 drawRearCar(
-                    cx = w / 2f,
+                    cx = playerCx,
                     bottomY = playerY,
                     width = playerWidth,
                     heightFactor = 0.8f,
@@ -396,7 +398,7 @@ fun HighwayScreen(
                 )
             }
             // Power-up effects around the car.
-            val bodyCenter = Offset(w / 2f, playerY - playerHeight / 2f)
+            val bodyCenter = Offset(playerCx, playerY - playerHeight / 2f)
             if (engine.magnetTimeLeft > 0f) {
                 drawMagnetAura(bodyCenter, playerWidth * 0.62f, playerHeight * 0.95f, engine.elapsedSeconds * 60f)
             }
@@ -678,7 +680,7 @@ private fun HighwayHud(engine: HighwayEngine, highScore: Int, modifier: Modifier
             )
         }
         // The late game starts: a short notice that things are about to speed up.
-        val sinceLate = engine.elapsedSeconds - HighwayEngine.RAMP_SECONDS
+        val sinceLate = engine.elapsedSeconds - HighwayEngine.LATE_START_SECONDS
         if (engine.status == GameStatus.RUNNING && sinceLate in 0f..LEVEL_UP_SECONDS) {
             Text(
                 text = "LEVEL UP!  더 빨라져요",

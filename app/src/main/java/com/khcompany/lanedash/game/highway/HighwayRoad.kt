@@ -83,7 +83,10 @@ class RoadStrips(val capacity: Int = 200) {
     val yTop = FloatArray(capacity)
     val yBottom = FloatArray(capacity)
 
-    /** Screen x of the road's center line in this strip (curve and camera offset applied). */
+    /**
+     * Screen x of the road's center line in this strip. The bottom strip is always dead center (the road
+     * does not slide when the car changes lanes); a bend only shows further up.
+     */
     val centerX = FloatArray(capacity)
 
     /** Screen pixels per road half-width in this strip. */
@@ -95,7 +98,6 @@ class RoadStrips(val capacity: Int = 200) {
 
     fun compute(
         cameraZ: Float,
-        cameraX: Float,
         screenWidth: Float,
         horizonY: Float,
         bottomY: Float,
@@ -108,6 +110,7 @@ class RoadStrips(val capacity: Int = 200) {
         var prevDz = 0f
         var dxAcc = 0f
         var xOff = 0f
+        var bendAtBottom = 0f
         var y = bottomY
         while (n < capacity && y - rowHeight > horizonY + 1f) {
             val t = ((y - rowHeight / 2f) - horizonY) / roadHeight
@@ -124,7 +127,9 @@ class RoadStrips(val capacity: Int = 200) {
             yBottom[n] = y
             yTop[n] = y - rowHeight
             halfWidth[n] = roadHalfWidth(t, screenWidth)
-            centerX[n] = screenWidth / 2f + xOff * hw0 * t - cameraX * halfWidth[n]
+            val bend = xOff * hw0 * t
+            if (n == 0) bendAtBottom = bend
+            centerX[n] = screenWidth / 2f + bend - bendAtBottom
             dz[n] = d
             band[n] = floor((cameraZ + d) / stripeLength).toInt() and 1
             n++
