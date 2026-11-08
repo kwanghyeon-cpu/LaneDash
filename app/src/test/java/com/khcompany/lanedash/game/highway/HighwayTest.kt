@@ -427,7 +427,7 @@ class HighwayEngineTest {
             engine.tick(0.05f)
         }
         assertTrue(engine.speed > HighwayEngine.EARLY_TOP_SPEED + 5f)
-        assertTrue(engine.speed <= HighwayEngine.MAX_SPEED)
+        assertTrue(engine.speed <= HighwayEngine.MAX_SPEED + HighwayEngine.LATE_SPEED_BONUS)
     }
 
     @Test
@@ -440,11 +440,11 @@ class HighwayEngineTest {
             engine.items.clear()
             keepFueled(0.05f)
             engine.tick(0.05f)
-            if (tick == 100 * 20) earlyTop = engine.speed
+            if (tick == 60 * 20) earlyTop = engine.speed
             lateTop = maxOf(lateTop, engine.speed)
         }
-        assertEquals("late is full 220 s in", 1f, engine.late, 1e-4f)
-        assertTrue("100 s in the speed is still at the early cap (" + earlyTop + ")", earlyTop <= HighwayEngine.MAX_SPEED)
+        assertEquals("late is full 180 s in", 1f, engine.late, 1e-4f)
+        assertTrue("60 s in the speed is still under the old cap (" + earlyTop + ")", earlyTop <= HighwayEngine.MAX_SPEED)
         assertTrue("late the top speed goes beyond it (" + lateTop + ")", lateTop > HighwayEngine.MAX_SPEED + HighwayEngine.LATE_SPEED_BONUS * 0.8f)
         assertTrue("late is 0 before the ramp ends", HighwayEngine().also { it.start(); repeat(100) { _ -> it.tick(0.05f) } }.late == 0f)
     }

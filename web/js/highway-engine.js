@@ -158,7 +158,7 @@ const TRAFFIC_KINDS = {
 const HW = {
   START_SPEED: 14,
   /** Top speed at the start of a run; it climbs to MAX_SPEED over RAMP_SECONDS. */
-  EARLY_TOP_SPEED: 22,
+  EARLY_TOP_SPEED: 24,
   MAX_SPEED: 30,
   RAMP_SECONDS: 120,
   ACCELERATION: 1.2,
@@ -197,24 +197,24 @@ const HW = {
   // Spawn events: seconds between attempts, easy -> hard, over DENSITY_RAMP_SECONDS.
   DENSITY_RAMP_SECONDS: 40,
   SPAWN_EASY_INTERVAL: 0.9,
-  SPAWN_HARD_INTERVAL: 0.35,
+  SPAWN_HARD_INTERVAL: 0.32,
   SPAWN_RETRY_INTERVAL: 0.08,
 
   // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
   // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS (and a bit past it).
   /** When the late game starts, and how long it takes to reach full strength. */
-  LATE_START_SECONDS: 100,
-  LATE_RAMP_SECONDS: 120,
+  LATE_START_SECONDS: 80,
+  LATE_RAMP_SECONDS: 100,
   /** Extra top speed at late = 1. */
-  LATE_SPEED_BONUS: 16,
+  LATE_SPEED_BONUS: 18,
   /** Fraction cut from the spawn interval at late = 1. */
-  LATE_INTERVAL_CUT: 0.65,
+  LATE_INTERVAL_CUT: 0.7,
   /** Extra fuel drain per second at late = 1. */
   LATE_FUEL_DRAIN: 1.2,
   /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
-  GATE_CHANCE: 0.8,
+  GATE_CHANCE: 0.85,
   /** Obstacles that are cones/barriers weigh this much more at late = 1 (moving traffic weighs less). */
-  LATE_STATIC_WEIGHT: 4,
+  LATE_STATIC_WEIGHT: 4.5,
   LATE_MOVING_WEIGHT: 0.55,
   // Minimum seconds between two obstacles passing the player in the same lane, easy -> hard.
   SEPARATION_EASY: 0.5,

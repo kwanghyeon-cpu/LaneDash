@@ -71,11 +71,11 @@ test('the game keeps getting harder after the ramp: speed, fuel and standing obs
     eng.items.length = 0;
     if (eng.fuel < 50) eng.items.push({ id: -1, lx: eng.playerX, z: eng.z + HW_PLAYER_DZ + eng.speed * 0.05, type: 'FUEL' });
     eng.tick(0.05);
-    if (tick === 100 * 20) earlyTop = eng.speed;
+    if (tick === 60 * 20) earlyTop = eng.speed;
     lateTop = Math.max(lateTop, eng.speed);
   }
-  assert.ok(Math.abs(eng.late - 1) < 1e-4, 'late is full 220 s in');
-  assert.ok(earlyTop <= HW.MAX_SPEED, 'still at the early cap at 100 s: ' + earlyTop);
+  assert.ok(Math.abs(eng.late - 1) < 1e-4, 'late is full 180 s in');
+  assert.ok(earlyTop <= HW.MAX_SPEED, 'still under the old cap at 60 s: ' + earlyTop);
   assert.ok(lateTop > HW.MAX_SPEED + HW.LATE_SPEED_BONUS * 0.8, 'late the top speed goes beyond it: ' + lateTop);
 });
 
@@ -381,7 +381,7 @@ test('the top speed climbs with the run', () => {
     engine.tick(0.05);
   }
   assert.ok(engine.speed > HW.EARLY_TOP_SPEED + 5);
-  assert.ok(engine.speed <= HW.MAX_SPEED);
+  assert.ok(engine.speed <= HW.MAX_SPEED + HW.LATE_SPEED_BONUS);
 });
 
 test('fuel drains, and an empty tank ends the run', () => {

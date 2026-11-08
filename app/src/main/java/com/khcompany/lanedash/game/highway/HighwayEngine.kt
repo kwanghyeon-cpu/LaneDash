@@ -455,7 +455,7 @@ class HighwayEngine(
         const val START_SPEED = 14f
 
         /** Top speed at the start of a run; it climbs to [MAX_SPEED] over [RAMP_SECONDS]. */
-        const val EARLY_TOP_SPEED = 22f
+        const val EARLY_TOP_SPEED = 24f
         const val MAX_SPEED = 30f
         const val RAMP_SECONDS = 120f
         const val ACCELERATION = 1.2f
@@ -509,29 +509,29 @@ class HighwayEngine(
         // Spawn events: seconds between attempts, easy -> hard, over DENSITY_RAMP_SECONDS.
         const val DENSITY_RAMP_SECONDS = 40f
         const val SPAWN_EASY_INTERVAL = 0.9f
-        const val SPAWN_HARD_INTERVAL = 0.35f
+        const val SPAWN_HARD_INTERVAL = 0.32f
         const val SPAWN_RETRY_INTERVAL = 0.08f
 
         // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
         // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS.
         /** When the late game starts, and how long it takes to reach full strength. */
-        const val LATE_START_SECONDS = 100f
-        const val LATE_RAMP_SECONDS = 120f
+        const val LATE_START_SECONDS = 80f
+        const val LATE_RAMP_SECONDS = 100f
 
         /** Extra top speed at late = 1. */
-        const val LATE_SPEED_BONUS = 16f
+        const val LATE_SPEED_BONUS = 18f
 
         /** Fraction cut from the spawn interval at late = 1. */
-        const val LATE_INTERVAL_CUT = 0.65f
+        const val LATE_INTERVAL_CUT = 0.7f
 
         /** Extra fuel drain per second at late = 1. */
         const val LATE_FUEL_DRAIN = 1.2f
 
         /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
-        const val GATE_CHANCE = 0.8f
+        const val GATE_CHANCE = 0.85f
 
         /** Cones and barriers weigh this much more at late = 1 (moving traffic weighs less). */
-        const val LATE_STATIC_WEIGHT = 4f
+        const val LATE_STATIC_WEIGHT = 4.5f
         const val LATE_MOVING_WEIGHT = 0.55f
 
         /** Minimum seconds between two obstacles passing the player in the same lane, easy -> hard. */
