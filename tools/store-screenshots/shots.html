@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>store screenshots</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>body{margin:0;background:#222;color:#ddd;font:14px sans-serif}canvas{display:block;margin:8px;width:300px;height:auto}</style>
+</head><body>
+<!-- Renders the Play Store screenshots (1080x1920) from the real web game engine and renderer.
+     Run: node tools/store-screenshots/serve.mjs, open http://127.0.0.1:8145/shots.html?save=1 -->
+<div id="log"></div>
+<script src="/web/js/catalog.js"></script>
+<script src="/web/js/icons.js"></script>
+<script src="/web/js/art.js"></script>
+<script src="/web/js/highway-engine.js"></script>
+<script src="/web/js/highway-render.js"></script>
+<script>
+const W = 1080, H = 1920, BAND = 220;
+const images = {};
+function load(path) { return new Promise((res) => { const i = new Image(); i.onload = () => res(); i.onerror = () => res(); i.src = '/web/' + path; images[path] = i; }); }
+function mulberry32(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const laneOf = (x) => HW_LANE_CENTERS.reduce((b, c, i) => (Math.abs(c - x) < Math.abs(HW_LANE_CENTERS[b] - x) ? i : b), 0);
+
+// A simple dodging bot so the frames come from a real run.
+function drive(engine, seconds) {
+  const dt = 1 / 60; let t = 0, next = 0;
+  const playerZ = () => engine.z + HW_PLAYER_DZ;
+  while (t < seconds && engine.status === 'RUNNING') {
+    if (t >= next) {
+      next = t + 0.12;
+      const lanes = HW_LANE_CENTERS.length;
+      const danger = new Array(lanes).fill(Infinity);
+      for (const c of engine.traffic) {
+        const rel = c.z - playerZ();
+        if (rel < -1.5 || rel > 22) continue;
+        const lane = laneOf(c.lx);
+        const closing = Math.max(1, engine.speed - c.speed);
+        danger[lane] = Math.min(danger[lane], Math.max(0, rel) / closing);
+      }
+      let target = engine.laneIndex;
+      if (danger[target] < 2.4) {
+        let best = target, bestScore = -1;
+        for (let l = 0; l < lanes; l++) { const s = Math.min(danger[l], 6) - Math.abs(l - engine.laneIndex) * 0.25; if (s > bestScore) { bestScore = s; best = l; } }
+        target = best;
+      }
+      if (target > engine.laneIndex) engine.moveLane(1); else if (target < engine.laneIndex) engine.moveLane(-1);
+    }
+    engine.tick(dt); t += dt;
+  }
+}
+
+/** A real seeded run, plus a few staged cars / pickups close ahead so the sprites read at phone size. */
+function run({ seed, seconds, cars = [], items = [], gate = null, shield = 0, magnet = 0, fuel = 74, lane = null }) {
+  const engine = new HighwayEngine(() => {}, mulberry32(seed));
+  engine.start();
+  drive(engine, seconds);
+  if (lane !== null) { engine.laneIndex = lane; engine.playerX = HW_LANE_CENTERS[lane]; }
+  const pz = engine.z + HW_PLAYER_DZ, me = engine.laneIndex;
+  engine.traffic = engine.traffic.filter(c => c.z - pz < 0 || c.z - pz > 30);
+  engine.items = engine.items.filter(it => it.z - pz < 0 || it.z - pz > 30);
+  const other = (d) => Math.max(0, Math.min(4, me + d));
+  cars.forEach(([rel, dl, kind], i) => engine.traffic.push({ id: 9000 + i, lx: HW_LANE_CENTERS[other(dl)], z: pz + rel, speed: 9, kind: TRAFFIC_KINDS[kind], passed: false }));
+  if (gate) { // [rel, openLane]: cones and barriers across every lane but one
+    for (let l = 0; l < 5; l++) if (l !== gate[1]) engine.traffic.push({ id: 9500 + l, lx: HW_LANE_CENTERS[l], z: pz + gate[0], speed: 0, kind: TRAFFIC_KINDS[(l % 2) ? 'BARRIER' : 'CONE'], passed: false });
+  }
+  items.forEach(([rel, dl, type], i) => engine.items.push({ id: 9100 + i, lx: HW_LANE_CENTERS[other(dl)], z: pz + rel, type }));
+  engine.shieldTimeLeft = shield; engine.magnetTimeLeft = magnet;
+  if (fuel > 0) engine.fuel = fuel;
+  return engine;
+}
+
+function gameFrame(engine, cityId, carId, w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  fxState.low = false;
+  drawHighwayFrame(c.getContext('2d'), w, h, engine, cityById(cityId), carById(carId), images);
+  return c;
+}
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+
+function hud(ctx, engine, x0, y0, w, { toast, chips = [] } = {}) {
+  ctx.textAlign = 'left'; ctx.fillStyle = '#F4EFFF';
+  drawIconGlyph(ctx, 'gauge', x0 + 70, y0 + 66, 54, '#F4EFFF');
+  ctx.font = '600 52px Pretendard'; ctx.fillText(`${Math.round(engine.speed * 7)} KM/H`, x0 + 112, y0 + 84);
+  let cy = y0 + 150;
+  chips.forEach(([glyph, color, label]) => {
+    drawIconGlyph(ctx, glyph, x0 + 64, cy - 12, 40, color);
+    ctx.fillStyle = color; ctx.font = '600 38px Pretendard'; ctx.fillText(label, x0 + 100, cy); cy += 56;
+  });
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#FFC93C'; ctx.font = '700 56px Pretendard'; ctx.fillText(`SCORE ${engine.score}`, x0 + w - 48, y0 + 84);
+  ctx.fillStyle = '#F4EFFF'; ctx.font = '500 34px Pretendard'; ctx.fillText(`BEST ${engine.score}`, x0 + w - 48, y0 + 132);
+  ctx.textAlign = 'center';
+  drawIconGlyph(ctx, 'gasPump', x0 + w / 2 - 54, y0 + 204, 34, 'rgba(244,239,255,0.8)');
+  ctx.fillStyle = 'rgba(244,239,255,0.8)'; ctx.font = '600 32px Pretendard'; ctx.fillText('FUEL', x0 + w / 2 + 8, y0 + 215);
+  const bw = 520, bh = 34, bx = x0 + w / 2 - bw / 2, by = y0 + 234;
+  rr(ctx, bx, by, bw, bh, 17); ctx.fillStyle = 'rgba(42,26,74,0.7)'; ctx.fill();
+  const f = Math.max(0, Math.min(1, engine.fuel / 100));
+  rr(ctx, bx, by, bw * f, bh, 17); ctx.fillStyle = f > 0.5 ? '#4CAF50' : f > 0.2 ? '#FFC93C' : '#E63946'; ctx.fill();
+  if (toast) {
+    ctx.font = '800 76px Pretendard'; ctx.lineWidth = 12; ctx.strokeStyle = 'rgba(29,18,51,0.85)'; ctx.strokeText(toast.text, x0 + w / 2, y0 + 440);
+    ctx.fillStyle = toast.color || '#FF3D8B'; ctx.fillText(toast.text, x0 + w / 2, y0 + 440);
+  }
+  ctx.textAlign = 'left';
+}
+
+function controls(ctx, x0, y0, w, h) {
+  const cy = y0 + h - 130;
+  const circle = (cx, r, glyph, size) => {
+    ctx.fillStyle = 'rgba(42,26,74,0.88)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    drawIconGlyph(ctx, glyph, cx, cy, size, '#FFC93C');
+  };
+  circle(x0 + 150, 84, 'caretLeft', 80);
+  circle(x0 + w / 2, 52, 'pause', 52);
+  circle(x0 + w - 150, 84, 'caretRight', 80);
+}
+
+function band(ctx, title, sub, { pill } = {}) {
+  ctx.fillStyle = '#1D1233'; ctx.fillRect(0, 0, W, BAND);
+  ctx.fillStyle = '#FFC93C'; ctx.fillRect(0, BAND - 4, W, 4);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#FFC93C'; ctx.font = '800 74px Pretendard'; ctx.fillText(title, W / 2, 122);
+  ctx.fillStyle = '#F4EFFF'; ctx.font = '500 38px Pretendard'; ctx.fillText(sub, W / 2, 182);
+  if (pill) {
+    ctx.font = '800 28px Pretendard';
+    const pw = ctx.measureText(pill).width + 36;
+    rr(ctx, W / 2 - pw / 2, 14, pw, 46, 23); ctx.fillStyle = '#FF3D8B'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(pill, W / 2, 47);
+  }
+  ctx.textAlign = 'left';
+}
+
+function shotCanvas() { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; }
+const FH = H - BAND;
+function play(ctx, engine, cityId, carId, hudOpts) {
+  ctx.drawImage(gameFrame(engine, cityId, carId, W, FH), 0, BAND);
+  hud(ctx, engine, 0, BAND, W, hudOpts); controls(ctx, 0, BAND, W, FH);
+}
+
+const shots = {
+  '01_gameplay'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    const e = run({ seed: 3, seconds: 26, lane: 3, cars: [[1.8, -1, 'SUV'], [4.4, -3, 'SEDAN'], [8, -2, 'TRUCK']] });
+    play(ctx, e, 'seoul', 'suv');
+    band(ctx, '차 뒤에서 달리는 아웃런 레이싱', '세로 화면으로 즐기는 하이웨이 레이싱', { pill: 'NEW 3.0' });
+    return c;
+  },
+  '02_nearmiss'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    const e = run({ seed: 7, seconds: 33, cars: [[0.15, 1, 'SEDAN'], [4, -1, 'SUV'], [7.5, 2, 'SEDAN']] });
+    play(ctx, e, 'tokyo', 'sports_car', { toast: { text: `NEAR MISS!  +${HW.NEAR_MISS_SCORE}` } });
+    band(ctx, '아슬아슬하게 피하면 보너스!', 'NEAR MISS로 높은 점수에 도전하세요');
+    return c;
+  },
+  '03_items'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    const e = run({ seed: 5, seconds: 17, lane: 1, cars: [[4.5, 3, 'SEDAN']], items: [[1.8, 1, 'SHIELD'], [3.4, 2, 'MAGNET'], [5.2, 0, 'FUEL'], [6.8, 1, 'FUEL']], shield: 4.3, magnet: 6.1, fuel: 58 });
+    play(ctx, e, 'paris', 'sedan', { chips: [['shield', '#4DA3FF', '방어막 5초'], ['magnet', '#E63946', '자석 7초']] });
+    band(ctx, '연료·방어막·자석을 모아요', '연료가 줄어들기 전에 연료통을 챙기세요');
+    return c;
+  },
+  '04_speed'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    const e = run({ seed: 21, seconds: 46, lane: 2, cars: [[1.5, -1, 'SUV'], [3.8, 1, 'TRUCK'], [7, -2, 'SEDAN']] });
+    play(ctx, e, 'newyork', 'van');
+    band(ctx, '달릴수록 빨라지는 5차선 도로', '처음부터 빠르고, 갈수록 더 빨라져요');
+    return c;
+  },
+  '05_gate'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    const e = run({ seed: 9, seconds: 20, lane: 2, gate: [4.2, 1], fuel: 66 });
+    e.elapsedSeconds = 150; e.speed = 40; // late game: fast, with a wall of obstacles and one open lane
+    play(ctx, e, 'seoul', 'sports_car', { toast: { text: 'LEVEL UP!  더 빨라져요', color: '#FFC93C' } });
+    band(ctx, '오래 달릴수록 더 어려워져요', '장애물 줄에서 열린 한 레인을 찾아 달려요');
+    return c;
+  },
+  '06_cities'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    ctx.fillStyle = '#120B22'; ctx.fillRect(0, 0, W, H);
+    const list = [['seoul', 'suv', 3, 22], ['tokyo', 'sports_car', 7, 28], ['newyork', 'sedan', 21, 30], ['paris', 'van', 5, 25]];
+    const cw = 500, ch = 780;
+    list.forEach(([city, car, seed, sec], i) => {
+      const e = run({ seed, seconds: sec, cars: [[1.5, i % 2 ? -1 : 1, 'SEDAN'], [4.5, i % 2 ? 1 : -1, 'SUV']] });
+      const x = 30 + (i % 2) * 520, y = BAND + 30 + Math.floor(i / 2) * (ch + 30);
+      const fc = gameFrame(e, city, car, cw, ch);
+      ctx.save(); rr(ctx, x, y, cw, ch, 36); ctx.clip(); ctx.drawImage(fc, x, y); ctx.restore();
+      rr(ctx, x, y, cw, ch, 36); ctx.strokeStyle = '#FFC93C'; ctx.lineWidth = 6; ctx.stroke();
+      ctx.fillStyle = 'rgba(29,18,51,0.82)'; rr(ctx, x + 20, y + 20, 170, 56, 28); ctx.fill();
+      ctx.fillStyle = '#FFC93C'; ctx.font = '800 30px Pretendard'; ctx.textAlign = 'center'; ctx.fillText(cityById(city).nameEn, x + 105, y + 58); ctx.textAlign = 'left';
+    });
+    band(ctx, '4개 도시, 4종의 차량', '취향대로 골라 도시를 질주하세요');
+    return c;
+  },
+  '07_gameover'() {
+    const c = shotCanvas(), ctx = c.getContext('2d');
+    const e = run({ seed: 11, seconds: 38, cars: [[2.5, 0, 'TRUCK'], [5, 1, 'SEDAN']], fuel: 0.01 });
+    ctx.drawImage(gameFrame(e, 'tokyo', 'suv', W, FH), 0, BAND);
+    ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, BAND, W, FH);
+    const cw = 820, cx = (W - cw) / 2, cy = BAND + 220;
+    rr(ctx, cx, cy, cw, 1000, 48); ctx.fillStyle = '#2A1A4A'; ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#FF3D8B'; ctx.font = '800 64px Pretendard'; ctx.fillText('GAME OVER', W / 2, cy + 110);
+    ctx.fillStyle = '#CDBBFF'; ctx.font = '500 36px Pretendard'; ctx.fillText('연료 소진', W / 2, cy + 168);
+    ctx.fillStyle = '#F4EFFF'; ctx.font = '700 56px Pretendard'; ctx.fillText(`SCORE ${e.score}`, W / 2, cy + 260);
+    ctx.fillStyle = '#FFC93C'; ctx.font = '700 36px Pretendard'; ctx.fillText('NEW BEST!', W / 2, cy + 318);
+    ctx.fillStyle = '#CDBBFF'; ctx.font = '500 30px Pretendard'; ctx.fillText(`생존 ${Math.floor(e.elapsedSeconds)}초 · 근접 회피 ${e.nearMissCount}회 · 연료 ${e.fuelCollected}개`, W / 2, cy + 376);
+    drawIconGlyph(ctx, 'trophy', W / 2 - 150, cy + 442, 44, '#FFC93C');
+    ctx.fillStyle = '#FFC93C'; ctx.font = '700 40px Pretendard'; ctx.fillText('TOP 10 진입!', W / 2 + 20, cy + 456);
+    rr(ctx, cx + 50, cy + 490, cw - 100, 90, 20); ctx.strokeStyle = 'rgba(244,239,255,0.35)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = 'rgba(244,239,255,0.5)'; ctx.font = '500 34px Pretendard'; ctx.textAlign = 'left'; ctx.fillText('이름 입력', cx + 80, cy + 548);
+    ctx.textAlign = 'center';
+    const btn = (x, y, w, h, label, glyph, fill, color) => {
+      rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = fill; ctx.fill();
+      ctx.fillStyle = color; ctx.font = '800 36px Pretendard';
+      const tw = ctx.measureText(label).width;
+      if (glyph) drawIconGlyph(ctx, glyph, x + w / 2 - tw / 2 - 18, y + h / 2, 38, color);
+      ctx.fillText(label, x + w / 2 + (glyph ? 22 : 0), y + h / 2 + 13);
+    };
+    btn(cx + 50, cy + 610, cw - 100, 96, '등록하기', null, '#FFC93C', '#1D1233');
+    btn(cx + 50, cy + 730, (cw - 120) / 2, 90, '순위표', 'ranking', '#1D1233', '#F4EFFF');
+    btn(cx + 70 + (cw - 120) / 2, cy + 730, (cw - 120) / 2, 90, '공유하기', 'share', '#1D1233', '#F4EFFF');
+    btn(cx + 50, cy + 844, (cw - 120) / 2, 96, 'RETRY', 'retry', '#FFC93C', '#1D1233');
+    btn(cx + 70 + (cw - 120) / 2, cy + 844, (cw - 120) / 2, 96, 'HOME', 'home', '#1D1233', '#F4EFFF');
+    ctx.textAlign = 'left';
+    band(ctx, '전 세계 TOP 10에 도전!', '순위권에 들면 이름을 남길 수 있어요');
+    return c;
+  },
+};
+
+async function main() {
+  const log = document.getElementById('log');
+  await Promise.all([
+    ...['800', '700', '600', '500'].map(w => document.fonts.load(`${w} 40px Pretendard`)),
+    ...CITIES.map(c => load(c.sprite)), ...CARS.map(c => load(c.rearSprite)), ...Object.values(TRAFFIC_KINDS).map(k => load(k.sprite)),
+  ]);
+  const save = new URLSearchParams(location.search).get('save') === '1';
+  for (const name of Object.keys(shots)) {
+    const c = shots[name]();
+    document.body.appendChild(c);
+    if (save) {
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+      await fetch('/save?name=' + name + '.png', { method: 'POST', body: blob });
+      log.textContent += ' saved ' + name;
+    }
+  }
+  log.textContent += ' done'; window.__done = true;
+}
+main().catch(e => { document.getElementById('log').textContent = 'ERR ' + e.stack; window.__err = e.stack; });
+</script>
+</body></html>
