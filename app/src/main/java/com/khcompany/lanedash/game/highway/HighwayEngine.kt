@@ -138,6 +138,9 @@ class HighwayEngine(
     private var fuelWarningPlayed = false
 
     /** The spawn roll waiting for a fair spot (-1 = none). */
+    /** When (run seconds) each lane last got an obstacle, so new ones spread across the road. */
+    private val laneLastSpawn = FloatArray(HW_LANE_CENTERS.size) { -10f }
+
     private var pendingRoll = -1f
 
     fun start() {
@@ -163,6 +166,7 @@ class HighwayEngine(
         nearMissFlash = 0f
         elapsedSeconds = 0f
         late = 0f
+        laneLastSpawn.fill(-10f)
         heading = 0f
         spawnCooldown = 1f
         pendingRoll = -1f
@@ -360,6 +364,16 @@ class HighwayEngine(
         return added
     }
 
+    /**
+     * Lanes in the order a new obstacle should try them: the ones that have gone longest without one
+     * first (with some noise), so obstacles spread across the road instead of queuing up in one lane,
+     * and lanes near the player slightly first so the player has to keep moving.
+     */
+    private fun obstacleLaneOrder(): List<Int> =
+        HW_LANE_CENTERS.indices.map { lane ->
+            lane to laneLastSpawn[lane] + random.nextFloat() * LANE_SPREAD_NOISE - abs(lane - laneIndex) * LANE_NEAR_PLAYER_BIAS
+        }.sortedBy { it.second }.map { it.first }
+
     /** A pickup goes in a lane where no obstacle will pass at nearly the same moment. */
     private fun spawnItem(type: ItemType): Boolean {
         val spawnZ = z + HW_DRAW_DISTANCE - 1f
@@ -439,12 +453,13 @@ class HighwayEngine(
         val spawnZ = z + HW_DRAW_DISTANCE - 1f
         val passIn = secondsUntilPassing(spawnZ, carSpeed)
 
-        for (lane in HW_LANE_CENTERS.indices.shuffled(random)) {
+        for (lane in obstacleLaneOrder()) {
             val fair = traffic.none { other ->
                 !other.passed &&
                     abs(secondsUntilPassing(other.z, other.speed) - passIn) < requiredGapSeconds(abs(lane - laneOf(other.lx)), difficulty)
             }
             if (!fair) continue
+            laneLastSpawn[lane] = elapsedSeconds
             traffic.add(TrafficCar(nextId++, HW_LANE_CENTERS[lane], spawnZ, carSpeed, kind))
             return true
         }
@@ -452,13 +467,13 @@ class HighwayEngine(
     }
 
     companion object {
-        const val START_SPEED = 14f
+        const val START_SPEED = 20f
 
         /** Top speed at the start of a run; it climbs to [MAX_SPEED] over [RAMP_SECONDS]. */
-        const val EARLY_TOP_SPEED = 24f
-        const val MAX_SPEED = 30f
+        const val EARLY_TOP_SPEED = 27f
+        const val MAX_SPEED = 33f
         const val RAMP_SECONDS = 120f
-        const val ACCELERATION = 1.2f
+        const val ACCELERATION = 1.4f
 
         /**
          * The lane-chasing spring: ~22 rad/s with a damping ratio of ~0.7, so a lane takes about
@@ -508,9 +523,13 @@ class HighwayEngine(
 
         // Spawn events: seconds between attempts, easy -> hard, over DENSITY_RAMP_SECONDS.
         const val DENSITY_RAMP_SECONDS = 40f
-        const val SPAWN_EASY_INTERVAL = 0.9f
-        const val SPAWN_HARD_INTERVAL = 0.32f
+        const val SPAWN_EASY_INTERVAL = 0.72f
+        const val SPAWN_HARD_INTERVAL = 0.3f
         const val SPAWN_RETRY_INTERVAL = 0.08f
+
+        /** Obstacle lane choice: noise (seconds) on how long a lane has been empty, and a pull toward the player's lane. */
+        const val LANE_SPREAD_NOISE = 2.5f
+        const val LANE_NEAR_PLAYER_BIAS = 0.15f
 
         // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
         // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS.
@@ -519,13 +538,13 @@ class HighwayEngine(
         const val LATE_RAMP_SECONDS = 100f
 
         /** Extra top speed at late = 1. */
-        const val LATE_SPEED_BONUS = 18f
+        const val LATE_SPEED_BONUS = 15f
 
         /** Fraction cut from the spawn interval at late = 1. */
         const val LATE_INTERVAL_CUT = 0.7f
 
         /** Extra fuel drain per second at late = 1. */
-        const val LATE_FUEL_DRAIN = 1.2f
+        const val LATE_FUEL_DRAIN = 1f
 
         /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
         const val GATE_CHANCE = 0.85f
@@ -535,8 +554,12 @@ class HighwayEngine(
         const val LATE_MOVING_WEIGHT = 0.55f
 
         /** Minimum seconds between two obstacles passing the player in the same lane, easy -> hard. */
-        const val SEPARATION_EASY = 0.5f
-        const val SEPARATION_HARD = 0.22f
+        const val SEPARATION_EASY = 0.37f
+        const val SEPARATION_HARD = 0.19f
+
+        /** Extra seconds required between two obstacles in the SAME lane, easy -> hard. */
+        const val SAME_LANE_EXTRA_EASY = 0.45f
+        const val SAME_LANE_EXTRA_HARD = 0.28f
 
         /** Extra seconds required per lane of distance between two obstacles, easy -> hard. */
         const val LANE_GAP_EASY = 0.3f
@@ -547,7 +570,10 @@ class HighwayEngine(
         fun requiredGapSeconds(laneDistance: Int, difficulty: Float): Float {
             val separation = SEPARATION_EASY + (SEPARATION_HARD - SEPARATION_EASY) * difficulty
             val perLane = LANE_GAP_EASY + (LANE_GAP_HARD - LANE_GAP_EASY) * difficulty
-            return separation + perLane * laneDistance
+            // Two obstacles in the same lane need extra room too: otherwise that lane is always the
+            // easiest slot and obstacles queue up in one lane while the rest of the road stays empty.
+            val sameLane = if (laneDistance == 0) SAME_LANE_EXTRA_EASY + (SAME_LANE_EXTRA_HARD - SAME_LANE_EXTRA_EASY) * difficulty else 0f
+            return separation + perLane * laneDistance + sameLane
         }
     }
 }

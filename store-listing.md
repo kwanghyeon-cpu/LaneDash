@@ -42,15 +42,16 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 ---
 
-## 릴리스 노트 — 3.0.3 (versionCode 19)
+## 릴리스 노트 — 3.0.4 (versionCode 20)
 
-Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 163자, 영어 318자). 3.0.1·3.0.2는 올리지 않고 이 버전에 합쳤습니다.
+Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 202자, 영어 392자). 3.0.1~3.0.3은 올리지 않고 이 버전에 합쳤습니다. 이미 올린 버전이 있다면 마지막 두 줄(속도·분포)만 남겨 증분 노트로 쓰세요.
 
 <ko-KR>
 도로와 난이도를 다듬었어요!
 • 도로가 화면 폭 가득 넓어지고, 좌우로 움직여도 도로가 흔들리지 않아요
-• 다가오는 차량이 훨씬 부드러워요
+• 다가오는 차량이 훨씬 부드러워졌어요
 • 서울·도쿄·뉴욕·파리 배경 그림을 새로 그렸어요
+• 처음부터 더 빨리 달리고, 장애물이 도로 전체에 골고루 나와요
 • 오래 달릴수록 더 어려워져요: 속도가 오르고 장애물 줄(게이트)이 나와요
 • 앱 용량이 줄었어요
 </ko-KR>
@@ -60,6 +61,7 @@ Road and difficulty polish!
 • The road fills the screen width and stays put when you change lanes
 • Approaching cars move much more smoothly
 • All-new backdrops for Seoul, Tokyo, New York and Paris
+• Faster from the very start, with obstacles spread across the whole road
 • The longer you survive, the harder it gets: faster speed and walls of obstacles with one open lane
 • Smaller app size
 </en-US>

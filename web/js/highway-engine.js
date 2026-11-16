@@ -156,12 +156,12 @@ const TRAFFIC_KINDS = {
 };
 
 const HW = {
-  START_SPEED: 14,
+  START_SPEED: 20,
   /** Top speed at the start of a run; it climbs to MAX_SPEED over RAMP_SECONDS. */
-  EARLY_TOP_SPEED: 24,
-  MAX_SPEED: 30,
+  EARLY_TOP_SPEED: 27,
+  MAX_SPEED: 33,
   RAMP_SECONDS: 120,
-  ACCELERATION: 1.2,
+  ACCELERATION: 1.4,
   /** The lane-chasing spring: ~22 rad/s, damping ratio ~0.7 — a lane takes ~0.15 s, a few percent overshoot. */
   LANE_SPRING: 480,
   LANE_DAMPING: 31,
@@ -196,9 +196,13 @@ const HW = {
   MAGNET_PULL_RATE: 10,
   // Spawn events: seconds between attempts, easy -> hard, over DENSITY_RAMP_SECONDS.
   DENSITY_RAMP_SECONDS: 40,
-  SPAWN_EASY_INTERVAL: 0.9,
-  SPAWN_HARD_INTERVAL: 0.32,
+  SPAWN_EASY_INTERVAL: 0.72,
+  SPAWN_HARD_INTERVAL: 0.30,
   SPAWN_RETRY_INTERVAL: 0.08,
+
+  /** Obstacle lane choice: noise (seconds) on how long a lane has been empty, and a pull toward the player's lane. */
+  LANE_SPREAD_NOISE: 2.5,
+  LANE_NEAR_PLAYER_BIAS: 0.15,
 
   // The late game: after RAMP_SECONDS the run keeps getting harder, so a skilled player is never
   // safe forever. `late` climbs 0 -> 1 over LATE_RAMP_SECONDS (and a bit past it).
@@ -206,21 +210,24 @@ const HW = {
   LATE_START_SECONDS: 80,
   LATE_RAMP_SECONDS: 100,
   /** Extra top speed at late = 1. */
-  LATE_SPEED_BONUS: 18,
+  LATE_SPEED_BONUS: 15,
   /** Fraction cut from the spawn interval at late = 1. */
   LATE_INTERVAL_CUT: 0.7,
   /** Extra fuel drain per second at late = 1. */
-  LATE_FUEL_DRAIN: 1.2,
+  LATE_FUEL_DRAIN: 1.0,
   /** Share of obstacle spawns that become a "gate" (a row of static obstacles with one open lane) at late = 1. */
   GATE_CHANCE: 0.85,
   /** Obstacles that are cones/barriers weigh this much more at late = 1 (moving traffic weighs less). */
   LATE_STATIC_WEIGHT: 4.5,
   LATE_MOVING_WEIGHT: 0.55,
   // Minimum seconds between two obstacles passing the player in the same lane, easy -> hard.
-  SEPARATION_EASY: 0.5,
-  SEPARATION_HARD: 0.22,
+  SEPARATION_EASY: 0.37,
+  SEPARATION_HARD: 0.19,
   // Extra seconds required per lane of distance between two obstacles, easy -> hard.
   LANE_GAP_EASY: 0.3,
+  /** Extra seconds required between two obstacles in the SAME lane, easy -> hard. */
+  SAME_LANE_EXTRA_EASY: 0.45,
+  SAME_LANE_EXTRA_HARD: 0.28,
   LANE_GAP_HARD: 0.17,
   MIN_CLOSING_SPEED: 1,
 };
@@ -229,7 +236,10 @@ const HW = {
 function requiredGapSeconds(laneDistance, difficulty) {
   const separation = HW.SEPARATION_EASY + (HW.SEPARATION_HARD - HW.SEPARATION_EASY) * difficulty;
   const perLane = HW.LANE_GAP_EASY + (HW.LANE_GAP_HARD - HW.LANE_GAP_EASY) * difficulty;
-  return separation + perLane * laneDistance;
+  // Two obstacles in the same lane need extra room too: otherwise that lane is always the easiest slot and
+  // obstacles queue up in one lane while the rest of the road stays empty.
+  const sameLane = laneDistance === 0 ? HW.SAME_LANE_EXTRA_EASY + (HW.SAME_LANE_EXTRA_HARD - HW.SAME_LANE_EXTRA_EASY) * difficulty : 0;
+  return separation + perLane * laneDistance + sameLane;
 }
 
 function laneIndexOf(lateral) {
@@ -280,6 +290,7 @@ class HighwayEngine {
     this.fuelWarningPlayed = false;
     this.nearMissFlash = 0; // seconds left of the "NEAR MISS" flash
     this.late = 0;
+    this.laneLastSpawn = HW_LANE_CENTERS.map(() => -10);
     this.elapsedSeconds = 0;
     this.heading = 0; // accumulated road heading; the renderer scrolls the skyline by it
     this.spawnCooldown = 1;
@@ -434,6 +445,17 @@ class HighwayEngine {
     return gap / Math.max(HW.MIN_CLOSING_SPEED, this.speed - thingSpeed);
   }
 
+  /**
+   * Lanes in the order a new obstacle should try them: the ones that have gone longest without one first
+   * (with some noise), so obstacles spread across the road instead of queuing up in one lane, and lanes
+   * near the player slightly first so the player has to keep moving.
+   */
+  _obstacleLaneOrder() {
+    const lanes = HW_LANE_CENTERS.map((_, i) => i);
+    const key = (lane) => this.laneLastSpawn[lane] + this.random() * HW.LANE_SPREAD_NOISE - Math.abs(lane - this.laneIndex) * HW.LANE_NEAR_PLAYER_BIAS;
+    return lanes.map((lane) => [lane, key(lane)]).sort((a, b) => a[1] - b[1]).map((p) => p[0]);
+  }
+
   _shuffledLanes() {
     const lanes = HW_LANE_CENTERS.map((_, i) => i);
     for (let i = lanes.length - 1; i > 0; i--) { // Fisher-Yates
@@ -537,11 +559,12 @@ class HighwayEngine {
     const spawnZ = this.z + HW_DRAW_DISTANCE - 1;
     const passIn = this._secondsUntilPassing(spawnZ, carSpeed);
 
-    for (const lane of this._shuffledLanes()) {
+    for (const lane of this._obstacleLaneOrder()) {
       const fair = !this.traffic.some((other) =>
         !other.passed &&
         Math.abs(this._secondsUntilPassing(other.z, other.speed) - passIn) < requiredGapSeconds(Math.abs(lane - laneIndexOf(other.lx)), difficulty));
       if (!fair) continue;
+      this.laneLastSpawn[lane] = this.elapsedSeconds;
       this.traffic.push({ id: this.nextId++, lx: HW_LANE_CENTERS[lane], z: spawnZ, speed: carSpeed, kind, passed: false });
       return true;
     }

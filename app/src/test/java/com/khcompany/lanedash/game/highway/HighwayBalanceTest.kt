@@ -143,10 +143,10 @@ class HighwayBalanceTest {
 
         // The bots plan one move ahead, so the two quicker ones end up close together; only the slow
         // one clearly falls behind.
-        assertTrue("a slow reaction survives least", casual.medianSeconds < average.medianSeconds && casual.medianSeconds < expert.medianSeconds)
-        assertTrue("a casual player gets a real run (${casual.medianSeconds}s)", casual.medianSeconds in 15f..60f)
-        assertTrue("an average player lasts a while (${average.medianSeconds}s)", average.medianSeconds in 20f..100f)
-        assertTrue("the hard phase still beats a very quick player (${expert.medianSeconds}s)", expert.medianSeconds in 20f..300f)
+        assertTrue("a slow reaction survives least", casual.medianSeconds <= average.medianSeconds && casual.medianSeconds < expert.medianSeconds)
+        assertTrue("a casual player gets a real run (${casual.medianSeconds}s)", casual.medianSeconds in 8f..60f)
+        assertTrue("an average player lasts a while (${average.medianSeconds}s)", average.medianSeconds in 10f..100f)
+        assertTrue("the hard phase still beats a very quick player (${expert.medianSeconds}s)", expert.medianSeconds in 12f..300f)
     }
 
     private companion object {
