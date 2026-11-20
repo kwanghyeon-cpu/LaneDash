@@ -26,6 +26,8 @@ Android 앱(Kotlin, Jetpack Compose)과 웹 버전(HTML5/JS)이 같은 엔진 �
 - Firebase 프로젝트 `lanedash-2cc5d`. 순위표 컬렉션 `scores_highway`(옛 클래식 `scores` 규칙도 구버전 앱 때문에 남겨 둠). 규칙은 `firestore.rules`.
 - `app/google-services.json`, `keystore.properties`, `keystore/`는 로컬 전용(gitignore). 저장소가 공개라 절대 커밋하지 않는다.
 - AdMob: `AndroidManifest.xml`의 앱 ID와 `ads/AdManager.kt`의 실제 광고 단위 ID. 디버그 빌드는 Google 샘플 ID를 쓴다.
+- 개인정보처리방침: `privacy-policy.md`(공개 주소 https://kwanghyeon-cpu.github.io/LaneDash/privacy-policy, 스토어에 등록된 주소).
+  **수집하는 정보나 제3자 서비스(SDK·Firebase 사용 범위 등)가 바뀌면 이 문서와 시행일자를 함께 고친다.**
 
 ## 검증
 
