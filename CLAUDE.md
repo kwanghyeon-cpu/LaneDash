@@ -41,7 +41,7 @@ Android 앱(Kotlin, Jetpack Compose)과 웹 버전(HTML5/JS)이 같은 엔진 �
 1. 작업은 `feature/...` 또는 `fix/...` 브랜치에서 하고 푸시한다.
 2. 사용자가 "마스터에 합치고 웹 배포해줘"라고 하면 master에 fast-forward로 합치고 푸시한다. Pages 빌드가 끝났는지 `gh api repos/kwanghyeon-cpu/LaneDash/pages/builds/latest`로 확인한다.
    웹 파일을 바꾸면 `web/index.html`의 `?v=` 캐시 번호를 올린다(이미지는 `main.js`의 `ASSET_VERSION`).
-3. 앱 번들: `app/build.gradle.kts`의 versionCode·versionName을 올리고 `./gradlew.bat :app:bundleRelease`, 결과를 `D:\lanedash-<버전>-<코드>.aab`로 복사한다.
+3. 앱 번들: `app/build.gradle.kts`의 versionCode·versionName을 올리고 `./gradlew.bat :app:bundleRelease`, 결과를 프로젝트 안 `releases\lanedash-<버전>-<코드>.aab`(`D:\AndroidStudioProjects\LaneDash\releases\`, gitignore)로 복사한다.
 4. 출시 노트는 `store-listing.md`에 한국어·영어로 추가한다(언어별 500자 이내, 글자 수 표기). 올리지 않은 버전은 다음 버전 노트에 합친다.
 
 ## 도구와 자산

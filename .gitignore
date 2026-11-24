@@ -18,3 +18,6 @@ local.properties
 
 # Firebase project config — repo is public, keep this local-only.
 /app/google-services.json
+
+# Release bundles copied out of app/build (see CLAUDE.md, release steps)
+/releases/
