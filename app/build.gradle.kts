@@ -26,8 +26,8 @@ android {
         applicationId = "com.khcompany.lanedash"
         minSdk = 26
         targetSdk = 37
-        versionCode = 22
-        versionName = "3.0.6"
+        versionCode = 23
+        versionName = "3.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

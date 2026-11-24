@@ -3,7 +3,7 @@
 세로 화면 아웃런 스타일 레이싱 게임. 차 뒤에서 바라보는 5차선 도로를 좌우 버튼으로 한 차선씩 옮겨 가며 차량·장애물을 피한다.
 Android 앱(Kotlin, Jetpack Compose)과 웹 버전(HTML5/JS)이 같은 엔진 값을 쓴다.
 
-- 패키지 `com.khcompany.lanedash`, Google Play 출시 중. 버전은 `app/build.gradle.kts`(현재 3.0.6, versionCode 22)
+- 패키지 `com.khcompany.lanedash`, Google Play 출시 중. 버전은 `app/build.gradle.kts`(현재 3.0.7, versionCode 23)
 - GitHub 공개 저장소 `kwanghyeon-cpu/LaneDash`, 웹은 master의 `web/`가 GitHub Pages로 자동 배포된다:
   https://kwanghyeon-cpu.github.io/LaneDash/web/
 - 3.0부터 클래식(가로) 모드는 없앴다. 하이웨이 한 가지 모드뿐이다.
