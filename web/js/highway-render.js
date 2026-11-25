@@ -2,14 +2,15 @@
 // HighwayFx.kt. Needs highway-engine.js and art.js (drawCitySkylineSprite, drawRoadHaze,
 // drawGroundShadow, hexA, updateFxQuality / fxState) to be loaded first.
 
-const HW_STRIPE_LENGTH = 1;
+// Long enough that the light/dark bands pass slowly (a full light+dark cycle is twice this).
+const HW_STRIPE_LENGTH = 3;
 
 // Lane dividers are short dashes, like a real highway: one dash per HW_DASH_PERIOD world units. Far
 // away a dash is thinner than a screen row and would shimmer, so past HW_DASH_FADE_DISTANCE the
 // divider is drawn as a faint continuous line instead.
-const HW_DASH_PERIOD = 1.2;
+const HW_DASH_PERIOD = 4;
 const HW_DASH_FRACTION = 0.33;
-const HW_DASH_FADE_DISTANCE = 14;
+const HW_DASH_FADE_DISTANCE = 20;
 const HW_GRASS = '#2E7D32';
 const HW_GRASS_DARK = '#276B2A';
 const HW_RUMBLE_RED = '#C4343A';
@@ -24,6 +25,14 @@ const HW_ITEM_RADIUS = 0.17;
 const hwStrips = new RoadStrips();
 
 /** Blends two #RRGGBB colors; t = 0 gives a, t = 1 gives b. */
+/** Like mixHex, but returns #RRGGBB so the result can be mixed again. */
+function mixHexToHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (shift) => Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
+  return '#' + [16, 8, 0].map((shift) => ch(shift).toString(16).padStart(2, '0')).join('');
+}
+
 function mixHex(a, b, t) {
   const pa = parseInt(a.slice(1), 16);
   const pb = parseInt(b.slice(1), 16);
@@ -159,10 +168,10 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   const speedRatio = Math.min(1, Math.max(0, engine.speed / HW.MAX_SPEED));
   const fancy = !fxState.low;
 
-  // Road vibration: grows with speed. The slight zoom
-  // keeps the shifted frame from showing an empty edge.
-  const amplitude = h * 0.0009 * speedRatio * speedRatio;
-  const shakeY = (Math.sin(engine.z * 1.7) * 0.6 + Math.sin(engine.z * 4.1) * 0.4) * amplitude;
+  // Road vibration: a slow, small sway that grows with speed (a fast jitter of the whole picture tires
+  // the eyes). The slight zoom keeps the shifted frame from showing an empty edge.
+  const amplitude = h * 0.0004 * speedRatio * speedRatio;
+  const shakeY = Math.sin(engine.z * 0.45) * amplitude;
   ctx.save();
   ctx.translate(w / 2, h / 2 + shakeY);
   ctx.scale(HW_SHAKE_ZOOM, HW_SHAKE_ZOOM);
@@ -179,7 +188,12 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     ctx.fillRect(0, 0, w, horizonY);
   }
 
-  ctx.fillStyle = mixHex(HW_GRASS, city.haze, 0.2);
+  // Stripes, rumble strips and dashes blend toward their average color when they would flicker.
+  const bandBlur = patternBlur(engine.speed, HW_STRIPE_LENGTH * 2) * 0.5;
+  const dashBlur = patternBlur(engine.speed, HW_DASH_PERIOD);
+  const grassLight = mixHexToHex(HW_GRASS, city.haze, 0.2);
+  const grassDark = mixHexToHex(HW_GRASS_DARK, city.haze, 0.2);
+  ctx.fillStyle = mixHex(grassLight, grassDark, bandBlur);
   ctx.fillRect(0, horizonY, w, roadH);
 
   const darkGrass = new Path2D();
@@ -189,6 +203,7 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
   const rumbleWhite = new Path2D();
   const laneMarks = new Path2D();
   const laneMarksFar = new Path2D();
+  const laneMarksBlurred = new Path2D();
   for (let i = 0; i < hwStrips.count; i++) {
     const top = hwStrips.yTop[i];
     const height = hwStrips.yBottom[i] + 0.5 - top;
@@ -204,27 +219,35 @@ function drawHighwayFrame(ctx, w, h, engine, city, car, images) {
     const depth = hwStrips.dz[i];
     const dashPhase = (engine.z + depth) / HW_DASH_PERIOD;
     const far = depth > HW_DASH_FADE_DISTANCE;
-    if (far || dashPhase - Math.floor(dashPhase) < HW_DASH_FRACTION) {
-      const half = hw * 0.02;
-      const marks = far ? laneMarksFar : laneMarks;
-      for (let divider = 1; divider < HW_LANE_COUNT; divider++) {
-        marks.rect(cx + (-1 + HW_LANE_SPACING * divider) * hw - half, top, half * 2, height);
+    const half = hw * 0.02;
+    const dashOn = dashPhase - Math.floor(dashPhase) < HW_DASH_FRACTION;
+    for (let divider = 1; divider < HW_LANE_COUNT; divider++) {
+      const x = cx + (-1 + HW_LANE_SPACING * divider) * hw - half;
+      if (far) laneMarksFar.rect(x, top, half * 2, height);
+      else {
+        if (dashOn) laneMarks.rect(x, top, half * 2, height);
+        if (dashBlur > 0) laneMarksBlurred.rect(x, top, half * 2, height);
       }
     }
   }
-  ctx.fillStyle = mixHex(HW_GRASS_DARK, city.haze, 0.2);
+  ctx.fillStyle = mixHex(grassDark, grassLight, bandBlur);
   ctx.fill(darkGrass);
-  ctx.fillStyle = HW_RUMBLE_RED;
+  ctx.fillStyle = mixHex(HW_RUMBLE_RED, HW_RUMBLE_WHITE, bandBlur);
   ctx.fill(rumbleRed);
-  ctx.fillStyle = HW_RUMBLE_WHITE;
+  ctx.fillStyle = mixHex(HW_RUMBLE_WHITE, HW_RUMBLE_RED, bandBlur);
   ctx.fill(rumbleWhite);
-  ctx.fillStyle = mixHex(city.roadColor, '#FFFFFF', 0.10);
+  ctx.fillStyle = mixHex(city.roadColor, '#FFFFFF', 0.10 - 0.05 * bandBlur);
   ctx.fill(roadLight);
-  ctx.fillStyle = mixHex(city.roadColor, '#FFFFFF', 0.05);
+  ctx.fillStyle = mixHex(city.roadColor, '#FFFFFF', 0.05 + 0.05 * bandBlur);
   ctx.fill(roadDark);
   ctx.fillStyle = hexA(city.roadLineColor, 0.4);
   ctx.fill(laneMarksFar);
-  ctx.fillStyle = hexA(city.roadLineColor, 0.9);
+  // Blurred dashes become a steady line as bright as the dashes are on average.
+  if (dashBlur > 0) {
+    ctx.fillStyle = hexA(city.roadLineColor, 0.9 * HW_DASH_FRACTION * dashBlur);
+    ctx.fill(laneMarksBlurred);
+  }
+  ctx.fillStyle = hexA(city.roadLineColor, 0.9 * (1 - dashBlur));
   ctx.fill(laneMarks);
 
   drawHighwayRoadside(ctx, w, h, engine.z, horizonY, rowH, city);

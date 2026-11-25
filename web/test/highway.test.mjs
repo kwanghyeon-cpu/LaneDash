@@ -14,13 +14,13 @@ function loadApi() {
   const src = fs.readFileSync(path.join(jsDir, 'highway-engine.js'), 'utf8');
   const ctx = vm.createContext({ Math, console });
   vm.runInContext(
-    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll, tForDz, dzForT, roadHalfWidth, fadeForDz, HW_PLAYER_T, HW_DRAW_DISTANCE, HW_FADE_DISTANCE };',
+    src + '\n;globalThis.__api = { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll, patternBlur, tForDz, dzForT, roadHalfWidth, fadeForDz, HW_PLAYER_T, HW_DRAW_DISTANCE, HW_FADE_DISTANCE };',
     ctx,
   );
   return ctx.__api;
 }
 
-const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll, tForDz, dzForT, roadHalfWidth, fadeForDz, HW_PLAYER_T, HW_DRAW_DISTANCE, HW_FADE_DISTANCE } = loadApi();
+const { HighwayEngine, RoadStrips, HW, TRAFFIC_KINDS, HW_PLAYER_DZ, HW_LANE_CENTERS, HW_LANE_SPACING, HW_HORIZON_FRACTION, curveAt, requiredGapSeconds, skylineScroll, patternBlur, tForDz, dzForT, roadHalfWidth, fadeForDz, HW_PLAYER_T, HW_DRAW_DISTANCE, HW_FADE_DISTANCE } = loadApi();
 
 /** Small seeded PRNG so every run is reproducible. */
 function mulberry32(seed) {
@@ -140,6 +140,20 @@ test('centerXAt interpolates between strips', () => {
   const mid = s.yBottom[5] - ROW / 2;
   assert.ok(Math.abs(s.centerXAt(mid, H, ROW) - s.centerX[5]) < 0.01);
   assert.ok(Math.abs(s.centerXAt(mid - ROW / 2, H, ROW) - (s.centerX[5] + s.centerX[6]) / 2) < 0.01);
+});
+
+test('road patterns blur instead of flickering at speed', () => {
+  // Slow patterns stay crisp; anything passing the eye in the 8-30 Hz flicker range is blended.
+  assert.equal(patternBlur(20, 6), 0);
+  assert.equal(patternBlur(48, 4), 1);
+  for (const speed of [20, 30, 40, 50]) {
+    for (const wavelength of [1, 2, 4, 6]) {
+      const hz = speed / wavelength;
+      if (hz >= 11) assert.equal(patternBlur(speed, wavelength), 1, speed + '/' + wavelength);
+      if (hz <= 6) assert.equal(patternBlur(speed, wavelength), 0, speed + '/' + wavelength);
+    }
+  }
+  assert.ok(patternBlur(30, 4) > 0 && patternBlur(30, 4) < 1, 'and in between it fades');
 });
 
 test('the bottom of the road stays fixed whatever the bend', () => {

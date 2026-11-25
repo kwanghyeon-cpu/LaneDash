@@ -39,6 +39,17 @@ const HW_FADE_DISTANCE = 14;
 /** 0..1 opacity of something dz ahead: fades in over the last HW_FADE_DISTANCE before the draw distance. */
 function fadeForDz(dz) { return Math.min(1, Math.max(0, (HW_DRAW_DISTANCE - dz) / HW_FADE_DISTANCE)); }
 
+// Repeating road patterns (stripes, dashes, rumble strips) pass the eye at speed / wavelength times a
+// second. Around 8-30 Hz a high-contrast pattern flickers and tires the eyes (and near half the frame rate
+// it strobes or even seems to run backward), so above HW_BLUR_START_HZ the pattern is blended toward its
+// average color, fully by HW_BLUR_FULL_HZ: the same thing motion blur does on a real camera.
+const HW_BLUR_START_HZ = 6;
+const HW_BLUR_FULL_HZ = 11;
+/** 0 (crisp) .. 1 (fully blended): how much a pattern of this wavelength (world units) blurs at this speed. */
+function patternBlur(speed, wavelength) {
+  return Math.min(1, Math.max(0, (speed / wavelength - HW_BLUR_START_HZ) / (HW_BLUR_FULL_HZ - HW_BLUR_START_HZ)));
+}
+
 /** The horizon's height as a fraction of the screen height. */
 const HW_HORIZON_FRACTION = 0.25;
 /** Lateral centers of the traffic lanes (road half-widths), left to right. */

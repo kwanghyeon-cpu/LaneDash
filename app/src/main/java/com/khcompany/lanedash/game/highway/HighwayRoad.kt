@@ -56,6 +56,17 @@ const val HW_FADE_DISTANCE = 14f
 /** 0..1 opacity of something [dz] ahead: fades in over the last [HW_FADE_DISTANCE] before the draw distance. */
 fun fadeForDz(dz: Float): Float = ((HW_DRAW_DISTANCE - dz) / HW_FADE_DISTANCE).coerceIn(0f, 1f)
 
+// Repeating road patterns (stripes, dashes, rumble strips) pass the eye at speed / wavelength times a
+// second. Around 8-30 Hz a high-contrast pattern flickers and tires the eyes (and near half the frame rate
+// it strobes or even seems to run backward), so above HW_BLUR_START_HZ the pattern is blended toward its
+// average color, fully by HW_BLUR_FULL_HZ: the same thing motion blur does on a real camera.
+const val HW_BLUR_START_HZ = 6f
+const val HW_BLUR_FULL_HZ = 11f
+
+/** 0 (crisp) .. 1 (fully blended): how much a pattern of this [wavelength] (world units) blurs at this [speed]. */
+fun patternBlur(speed: Float, wavelength: Float): Float =
+    ((speed / wavelength - HW_BLUR_START_HZ) / (HW_BLUR_FULL_HZ - HW_BLUR_START_HZ)).coerceIn(0f, 1f)
+
 /** The horizon's height as a fraction of the screen height. */
 const val HW_HORIZON_FRACTION = 0.25f
 

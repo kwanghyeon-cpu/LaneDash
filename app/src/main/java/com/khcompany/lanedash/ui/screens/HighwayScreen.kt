@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import com.khcompany.lanedash.ui.components.FUEL_ITEM_COLOR
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -82,6 +83,7 @@ import com.khcompany.lanedash.game.highway.HW_LANE_COUNT
 import com.khcompany.lanedash.game.highway.HW_LANE_SPACING
 import com.khcompany.lanedash.game.highway.HW_PLAYER_T
 import com.khcompany.lanedash.game.highway.fadeForDz
+import com.khcompany.lanedash.game.highway.patternBlur
 import com.khcompany.lanedash.game.highway.roadHalfWidth
 import com.khcompany.lanedash.game.highway.tForDz
 import com.khcompany.lanedash.game.highway.HighwayEngine
@@ -100,7 +102,8 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private const val STRIPE_LENGTH = 1f
+// Long enough that the light/dark bands pass slowly (a full light+dark cycle is twice this).
+private const val STRIPE_LENGTH = 3f
 
 /** Speedometer scale: world units per second to the KM/H shown in the HUD. */
 private const val KMH_PER_UNIT = 7f
@@ -108,9 +111,9 @@ private const val KMH_PER_UNIT = 7f
 // Lane dividers are short dashes, like a real highway: one dash per DASH_PERIOD world units. Far
 // away a dash is thinner than a screen row and would shimmer, so past DASH_FADE_DISTANCE the
 // divider is drawn as a faint continuous line instead.
-private const val DASH_PERIOD = 1.2f
+private const val DASH_PERIOD = 4f
 private const val DASH_FRACTION = 0.33f
-private const val DASH_FADE_DISTANCE = 14f
+private const val DASH_FADE_DISTANCE = 20f
 
 /** Scale applied to the road layer so its vibration never exposes an empty edge. */
 private const val SHAKE_ZOOM = 1.02f
@@ -171,6 +174,7 @@ fun HighwayScreen(
     val rumbleWhite = remember { Path() }
     val laneMarks = remember { Path() }
     val laneMarksFar = remember { Path() }
+    val laneMarksBlurred = remember { Path() }
     val roadside = remember { RoadsideBatch() }
 
     DisposableEffect(Unit) {
@@ -226,14 +230,14 @@ fun HighwayScreen(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                // Road vibration: grows with speed, and the grass shakes the car much harder. The
-                // slight zoom keeps the shifted frame from showing an empty edge.
+                // Road vibration: a slow, small sway that grows with speed (a fast jitter of the whole
+                // picture tires the eyes). The slight zoom keeps the shifted frame from showing an empty edge.
                 .graphicsLayer {
                     val speedRatio = (engine.speed / HighwayEngine.MAX_SPEED).coerceIn(0f, 1f)
-                    val amplitude = size.height * 0.0009f * speedRatio * speedRatio
+                    val amplitude = size.height * 0.0004f * speedRatio * speedRatio
                     scaleX = SHAKE_ZOOM
                     scaleY = SHAKE_ZOOM
-                    translationY = (sin(engine.z * 1.7f) * 0.6f + sin(engine.z * 4.1f) * 0.4f) * amplitude
+                    translationY = sin(engine.z * 0.45f) * amplitude
                 },
         ) {
             if (!ready) {
@@ -261,10 +265,13 @@ fun HighwayScreen(
 
             val grassLight = lerp(ROAD_GRASS, city.haze, 0.2f)
             val grassDark = lerp(Color(0xFF276B2A), city.haze, 0.2f)
-            drawRect(grassLight, Offset(0f, horizonY), Size(w, roadH))
+            // Stripes, rumble strips and dashes blend toward their average color when they would flicker.
+            val bandBlur = patternBlur(engine.speed, STRIPE_LENGTH * 2f) * 0.5f
+            val dashBlur = patternBlur(engine.speed, DASH_PERIOD)
+            drawRect(lerp(grassLight, grassDark, bandBlur), Offset(0f, horizonY), Size(w, roadH))
 
             darkGrass.reset(); roadLight.reset(); roadDark.reset()
-            rumbleRed.reset(); rumbleWhite.reset(); laneMarks.reset(); laneMarksFar.reset()
+            rumbleRed.reset(); rumbleWhite.reset(); laneMarks.reset(); laneMarksFar.reset(); laneMarksBlurred.reset()
             for (i in 0 until strips.count) {
                 val top = strips.yTop[i]
                 val bottom = strips.yBottom[i] + 0.5f
@@ -280,22 +287,28 @@ fun HighwayScreen(
                 val depth = strips.dz[i]
                 val dashPhase = (engine.z + depth) / DASH_PERIOD
                 val far = depth > DASH_FADE_DISTANCE
-                if (far || dashPhase - floor(dashPhase) < DASH_FRACTION) {
-                    val half = hw * 0.02f
-                    val marks = if (far) laneMarksFar else laneMarks
-                    for (divider in 1 until HW_LANE_COUNT) {
-                        val x = cx + (-1f + HW_LANE_SPACING * divider) * hw
-                        marks.addRect(Rect(x - half, top, x + half, bottom))
+                val half = hw * 0.02f
+                val dashOn = dashPhase - floor(dashPhase) < DASH_FRACTION
+                for (divider in 1 until HW_LANE_COUNT) {
+                    val x = cx + (-1f + HW_LANE_SPACING * divider) * hw
+                    val rect = Rect(x - half, top, x + half, bottom)
+                    if (far) {
+                        laneMarksFar.addRect(rect)
+                    } else {
+                        if (dashOn) laneMarks.addRect(rect)
+                        if (dashBlur > 0f) laneMarksBlurred.addRect(rect)
                     }
                 }
             }
-            drawPath(darkGrass, grassDark)
-            drawPath(rumbleRed, RUMBLE_RED)
-            drawPath(rumbleWhite, RUMBLE_WHITE)
-            drawPath(roadLight, lerp(city.roadColor, Color.White, 0.10f))
-            drawPath(roadDark, lerp(city.roadColor, Color.White, 0.05f))
+            drawPath(darkGrass, lerp(grassDark, grassLight, bandBlur))
+            drawPath(rumbleRed, lerp(RUMBLE_RED, RUMBLE_WHITE, bandBlur))
+            drawPath(rumbleWhite, lerp(RUMBLE_WHITE, RUMBLE_RED, bandBlur))
+            drawPath(roadLight, lerp(city.roadColor, Color.White, 0.10f - 0.05f * bandBlur))
+            drawPath(roadDark, lerp(city.roadColor, Color.White, 0.05f + 0.05f * bandBlur))
             drawPath(laneMarksFar, city.roadLineColor.copy(alpha = 0.4f))
-            drawPath(laneMarks, city.roadLineColor.copy(alpha = 0.9f))
+            // Blurred dashes become a steady line as bright as the dashes are on average.
+            if (dashBlur > 0f) drawPath(laneMarksBlurred, city.roadLineColor.copy(alpha = 0.9f * DASH_FRACTION * dashBlur))
+            drawPath(laneMarks, city.roadLineColor.copy(alpha = 0.9f * (1f - dashBlur)))
             drawRoadside(
                 batch = roadside,
                 strips = strips,
@@ -838,14 +851,22 @@ private fun DrawScope.drawRearSprite(
     val height = width * sprite.height / sprite.width
     drawGroundShadow(cx, bottomY, width, height)
     // Leaning pivots on the tires' contact line so the car rolls into the turn, not off its shadow.
+    // Whole-pixel destination plus a sub-pixel translate, so a slowly approaching car glides instead of
+    // stepping one pixel at a time.
+    val left = cx - width / 2f
+    val top = bottomY - height
+    val ix = floor(left)
+    val iy = floor(top)
     rotate(leanDegrees, pivot = Offset(cx, bottomY)) {
-        drawImage(
-            image = sprite,
-            srcSize = IntSize(sprite.width, sprite.height),
-            dstOffset = IntOffset((cx - width / 2f).roundToInt(), (bottomY - height).roundToInt()),
-            dstSize = IntSize(width.roundToInt(), height.roundToInt()),
-            filterQuality = FilterQuality.Medium,
-        )
+        translate(left - ix, top - iy) {
+            drawImage(
+                image = sprite,
+                srcSize = IntSize(sprite.width, sprite.height),
+                dstOffset = IntOffset(ix.toInt(), iy.toInt()),
+                dstSize = IntSize(width.roundToInt(), height.roundToInt()),
+                filterQuality = FilterQuality.Medium,
+            )
+        }
     }
 }
 

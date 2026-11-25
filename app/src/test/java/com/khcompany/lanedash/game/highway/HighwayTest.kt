@@ -33,6 +33,21 @@ class HighwayRoadTest {
     }
 
     @Test
+    fun roadPatternsBlurInsteadOfFlickeringAtSpeed() {
+        // Slow patterns stay crisp; anything passing the eye in the 8-30 Hz flicker range is blended.
+        assertEquals(0f, patternBlur(20f, 6f), 0f)
+        assertEquals(1f, patternBlur(48f, 4f), 0f)
+        for (speed in listOf(20f, 30f, 40f, 50f)) {
+            for (wavelength in listOf(1f, 2f, 4f, 6f)) {
+                val hz = speed / wavelength
+                if (hz >= 11f) assertEquals("$speed/$wavelength", 1f, patternBlur(speed, wavelength), 0f)
+                if (hz <= 6f) assertEquals("$speed/$wavelength", 0f, patternBlur(speed, wavelength), 0f)
+            }
+        }
+        assertTrue("and in between it fades", patternBlur(30f, 4f) in 0.01f..0.99f)
+    }
+
+    @Test
     fun theBottomOfTheRoadStaysFixedWhateverTheBend() {
         // However the road bends at this point of the run, the bottom strip is centered at full width.
         var z = 0f
