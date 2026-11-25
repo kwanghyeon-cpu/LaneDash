@@ -42,6 +42,26 @@ SUV, 스포츠카, 세단, 승합차 중 마음에 드는 차로 달려보세요
 
 ---
 
+## 릴리스 노트 — 3.0.8 (versionCode 24)
+
+Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 90자, 영어 148자). 3.0.7을 올리지 않았다면 3.0.7 노트의 항목을 아래에 이어 붙이세요.
+
+<ko-KR>
+눈이 편해지는 업데이트예요!
+• 빠르게 달려도 도로 줄무늬와 차선이 깜빡이지 않아요
+• 화면 흔들림을 줄여 더 부드럽게 달려요
+• 차량 움직임이 더 매끄러워졌어요
+</ko-KR>
+
+<en-US>
+Easier on the eyes!
+• Road stripes and lane lines no longer flicker at high speed
+• Gentler screen shake for a smoother ride
+• Smoother car movement
+</en-US>
+
+---
+
 ## 릴리스 노트 — 3.0.7 (versionCode 23)
 
 Play Console의 "이 버전의 새로운 기능" 칸에 그대로 붙여 넣으세요 (언어별 500자 이내: 한국어 202자, 영어 392자). 3.0.1~3.0.6을 올리지 않았다면 이 버전에 합친 노트입니다. 이미 올린 버전이 있다면 마지막 두 줄(속도·분포)만 남겨 증분 노트로 쓰세요.
