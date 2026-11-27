@@ -20,6 +20,8 @@ Android 앱(Kotlin, Jetpack Compose)과 웹 버전(HTML5/JS)이 같은 엔진 �
 - 난이도: 초반 램프(`RAMP_SECONDS`, `DENSITY_RAMP_SECONDS`) + 후반 `late`(`LATE_START_SECONDS`부터 속도·밀도·정지 장애물·게이트·연료 소모 증가).
   장애물은 공정성 규칙(`requiredGapSeconds`)과 레인 분산(`obstacleLaneOrder`, 같은 레인 추가 간격)을 지켜 생성된다.
 - 아이템: 연료통, 방어막(6초), 자석(8초). 근접 회피 보너스. 게임오버 전면광고(10판마다), 보상형 "광고 보고 계속하기"(판당 1회).
+- 형제 앱 홍보("함께 즐기면 좋은 게임"): 공용 목록 https://kwanghyeon-cpu.github.io/related-apps.json(관리는 포트폴리오 저장소)을 하루 한 번 받고, 실패하면 기본 사본(`app/src/main/assets/related-apps.json` = `web/related-apps.json`, 두 사본은 같아야 함)을 쓴다.
+  `related/RelatedApps*.kt` ↔ `web/js/related.js`. 순위표 화면 카드, 게임오버 한 줄, 웹 타이틀 아래 링크. 형제 앱 package는 `AndroidManifest.xml`의 `<queries>`에도 넣는다.
 
 ## 계정·외부 연결 (값 바꾸지 말 것)
 

@@ -28,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.khcompany.lanedash.game.LeaderboardEntry
 import com.khcompany.lanedash.game.LeaderboardRepository
+import com.khcompany.lanedash.ui.components.RelatedAppsCard
+import com.khcompany.lanedash.ui.components.rememberRelatedApps
 
 @Composable
 fun LeaderboardScreen(
@@ -100,6 +102,8 @@ fun LeaderboardScreen(
                 }
             }
         }
+
+        RelatedAppsCard(apps = rememberRelatedApps(), modifier = Modifier.padding(top = 12.dp))
 
         Button(
             onClick = onHome,

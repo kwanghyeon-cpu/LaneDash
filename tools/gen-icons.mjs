@@ -29,6 +29,8 @@ const ICONS = [
   ['PLAY', 'play', 'play-fill'],
   ['RETRY', 'retry', 'arrow-clockwise-fill'],
   ['PLAY_CIRCLE', 'playCircle', 'play-circle-fill'],
+  ['SNEAKER', 'sneaker', 'sneaker-move-fill'],
+  ['OPEN_EXTERNAL', 'openExternal', 'arrow-square-out-fill'],
 ];
 
 const j = await (await fetch(`https://api.iconify.design/ph.json?icons=${ICONS.map((i) => i[2]).join(',')}`)).json();

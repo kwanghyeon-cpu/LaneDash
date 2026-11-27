@@ -346,6 +346,7 @@ function showGameOver() {
   submitBtn.textContent = '등록하기';
 
   document.getElementById('gameover-overlay').classList.remove('hidden');
+  loadRelatedApps().then((apps) => renderRelatedLine(document.getElementById('gameover-related'), apps));
 
   const score = engine.score;
   // Same rule as qualifiesForTop in leaderboard.js, but keeping the list lets us also say
@@ -462,6 +463,7 @@ function goHome() {
 // ---------- LEADERBOARD ----------
 function showLeaderboardScreen(highlightName, highlightScore) {
   showScreen('screen-leaderboard');
+  loadRelatedApps().then((apps) => renderRelatedCard(document.getElementById('leaderboard-related'), apps));
   const list = document.getElementById('leaderboard-list');
   list.innerHTML = '<div class="leaderboard-status">불러오는 중...</div>';
 
@@ -528,3 +530,5 @@ buildCityGrid();
 buildCarGrid();
 syncSettingsUI();
 showScreen('screen-home');
+// Sibling games ("함께 즐기면 좋은 게임"): a small link under the title screen.
+loadRelatedApps().then((apps) => renderRelatedLine(document.getElementById('home-related'), apps));

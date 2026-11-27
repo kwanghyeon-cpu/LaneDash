@@ -76,6 +76,8 @@ import com.khcompany.lanedash.ui.components.SHIELD_ITEM_COLOR
 import com.khcompany.lanedash.ui.components.MAGNET_ITEM_COLOR
 import com.khcompany.lanedash.game.ItemType
 import com.khcompany.lanedash.game.GameOverReason
+import com.khcompany.lanedash.ui.components.RelatedAppLine
+import com.khcompany.lanedash.ui.components.rememberRelatedApps
 import com.khcompany.lanedash.game.LeaderboardRepository
 import com.khcompany.lanedash.game.highway.HW_DRAW_DISTANCE
 import com.khcompany.lanedash.game.highway.HW_HORIZON_FRACTION
@@ -152,6 +154,8 @@ fun HighwayScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? android.app.Activity
+    // Loaded once while driving so the game-over line is ready without a pop-in.
+    val relatedApps = rememberRelatedApps()
     val soundManager = remember { SoundManager(context) }
     val haptics = remember { HapticsManager(context) }
     val engine = remember {
@@ -602,6 +606,7 @@ fun HighwayScreen(
                 ) {
                     ButtonLabel(GameIcon.HOME, "HOME", MaterialTheme.colorScheme.onBackground)
                 }
+                relatedApps.firstOrNull()?.let { RelatedAppLine(it, modifier = Modifier.padding(top = 10.dp)) }
             }
         }
     }

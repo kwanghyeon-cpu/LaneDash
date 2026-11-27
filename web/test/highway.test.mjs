@@ -609,3 +609,45 @@ test('a slower player survives less, and nobody is immortal or doomed', () => {
   assert.ok(average >= 10 && average <= 100, `average median ${average}s`);
   assert.ok(expert >= 12 && expert < 300, `expert median ${expert}s`);
 });
+
+// ---------- sibling games ("함께 즐기면 좋은 게임", web/js/related.js; mirrors RelatedAppsTest.kt) ----------
+function loadRelated() {
+  const src = fs.readFileSync(path.join(jsDir, 'related.js'), 'utf8');
+  const ctx = vm.createContext({ Math, console });
+  vm.runInContext(src + '\n;globalThis.__api = { relatedSiblings, relatedLink, relatedShouldRefresh, RELATED_REFRESH_MS };', ctx);
+  return ctx.__api;
+}
+
+test('sibling games come from shared groups without self, repeats or dead ends', () => {
+  const { relatedSiblings, relatedLink } = loadRelated();
+  const catalog = {
+    groups: [{ id: 'racing', apps: ['lanedash', 'yorijorirun', 'nowhere'] }, { id: 'o', apps: ['store', 'yorijorirun', 'lanedash'] }, { id: 'u', apps: ['x'] }],
+    apps: {
+      lanedash: { name: 'Lane Dash', package: 'com.khcompany.lanedash', public: true, web: 'https://w/l' },
+      yorijorirun: { name: '요리조리 런', package: 'com.khcompany.yorijorirun', public: false, web: 'https://w/y' },
+      nowhere: { name: 'N', package: null, public: false, web: null },
+      store: { name: 'S', package: 'com.khcompany.store', public: true, web: null },
+      x: { name: 'X', package: 'com.x', public: true, web: null },
+    },
+  };
+  const siblings = relatedSiblings(catalog, 'lanedash');
+  assert.deepEqual([...siblings.map((a) => a.id)], ['yorijorirun', 'store']); // spread: vm arrays come from another realm
+  assert.equal(relatedLink(siblings[0]), 'https://w/y');
+  assert.equal(relatedLink(siblings[1]), 'https://play.google.com/store/apps/details?id=com.khcompany.store');
+});
+
+test('bundled sibling list points Lane Dash at 요리조리 런, same as the app copy', () => {
+  const { relatedSiblings } = loadRelated();
+  const webCopy = fs.readFileSync(path.join(jsDir, '..', 'related-apps.json'), 'utf8');
+  const appCopy = fs.readFileSync(path.join(jsDir, '..', '..', 'app', 'src', 'main', 'assets', 'related-apps.json'), 'utf8');
+  assert.deepEqual(JSON.parse(webCopy), JSON.parse(appCopy));
+  assert.equal(relatedSiblings(JSON.parse(webCopy))[0].id, 'yorijorirun');
+});
+
+test('sibling list refreshes at most once a day', () => {
+  const { relatedShouldRefresh, RELATED_REFRESH_MS: day } = loadRelated();
+  assert.equal(relatedShouldRefresh(0, 1000), true);
+  assert.equal(relatedShouldRefresh(1000, 1000 + day - 1), false);
+  assert.equal(relatedShouldRefresh(1000, 1000 + day), true);
+  assert.equal(relatedShouldRefresh(5000, 1000), true);
+});
